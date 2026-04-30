@@ -1,0 +1,41 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
+
+class Supplier extends Model
+{
+    use SoftDeletes;
+
+    protected $keyType = 'string';
+    public $incrementing = false;
+
+    protected $fillable = [
+        'tenant_id', 'name', 'company', 'phone', 'email', 'address', 'city',
+        'ntn', 'cnic', 'payment_terms', 'opening_balance', 'current_balance',
+        'is_active', 'notes',
+    ];
+
+    protected $casts = [
+        'opening_balance' => 'decimal:2',
+        'current_balance' => 'decimal:2',
+        'is_active'       => 'boolean',
+    ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (Supplier $s) {
+            if (empty($s->id)) {
+                $s->id = (string) \Illuminate\Support\Str::uuid();
+            }
+        });
+    }
+
+    public function purchaseOrders(): HasMany
+    {
+        return $this->hasMany(PurchaseOrder::class);
+    }
+}

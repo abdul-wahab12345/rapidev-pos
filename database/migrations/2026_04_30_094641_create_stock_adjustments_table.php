@@ -1,0 +1,40 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('stock_adjustments', function (Blueprint $table) {
+            $table->uuid('id')->primary();
+            $table->uuid('tenant_id');
+            $table->uuid('branch_id');
+            $table->uuid('product_id');
+            $table->uuid('variant_id')->nullable();
+            $table->unsignedBigInteger('user_id');          // who made the adjustment
+            $table->integer('quantity_before');
+            $table->integer('quantity_change');             // positive = added, negative = removed
+            $table->integer('quantity_after');
+            $table->string('reason');                       // purchase, damage, theft, correction, return
+            $table->text('notes')->nullable();
+            $table->timestamps();
+
+            $table->foreign('tenant_id')->references('id')->on('tenants')->onDelete('cascade');
+            $table->foreign('branch_id')->references('id')->on('branches')->onDelete('cascade');
+            $table->foreign('product_id')->references('id')->on('products')->onDelete('cascade');
+            $table->foreign('variant_id')->references('id')->on('product_variants')->onDelete('cascade');
+            $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
+
+            $table->index(['tenant_id', 'product_id']);
+            $table->index(['tenant_id', 'created_at']);
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('stock_adjustments');
+    }
+};

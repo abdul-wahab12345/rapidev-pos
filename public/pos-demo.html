@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bithouse POS — Cashier Demo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50:'#eff6ff', 100:'#dbeafe', 500:'#3b82f6', 600:'#2563eb', 700:'#1d4ed8', 900:'#1e3a8a' },
+          },
+          fontFamily: { sans: ['Inter', 'system-ui', 'sans-serif'] },
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    [x-cloak] { display: none !important; }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #374151; border-radius: 2px; }
+    * { box-sizing: border-box; }
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-100 font-sans antialiased" style="height:100dvh; overflow:hidden;">
+
+<div
+  x-data="pos()"
+  class="flex flex-col h-screen"
+  @keydown.window="handleKeydown($event)"
+>
+
+  <!-- ── Top Bar ── -->
+  <header class="flex items-center gap-4 px-5 bg-gray-900 border-b border-gray-800 shrink-0" style="height:52px;">
+    <div class="flex items-center gap-2">
+      <div class="bg-blue-600 rounded px-2.5 py-1">
+        <span class="text-white font-bold text-xs tracking-widest">BITHOUSE POS</span>
+      </div>
+      <div class="w-px h-5 bg-gray-700"></div>
+      <span class="font-semibold text-sm">Ahmed General Store</span>
+      <span class="bg-blue-900/50 text-blue-300 border border-blue-800 text-xs px-2 py-0.5 rounded-full">Main Branch</span>
+    </div>
+
+    <div class="ml-auto flex items-center gap-4">
+      <!-- Notification bell -->
+      <button class="relative text-gray-400 hover:text-gray-200 transition-colors">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+        <span class="absolute -top-1 -right-1 w-3.5 h-3.5 bg-amber-500 rounded-full text-[9px] font-bold flex items-center justify-center text-white">3</span>
+      </button>
+      <div class="w-px h-5 bg-gray-700"></div>
+      <div class="flex items-center gap-2">
+        <div class="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-xs font-bold text-white">UA</div>
+        <span class="text-sm text-gray-300">Usman Ali</span>
+      </div>
+      <div class="w-px h-5 bg-gray-700"></div>
+      <span class="text-xs text-gray-500" x-text="currentTime"></span>
+    </div>
+  </header>
+
+  <!-- ── Main Body ── -->
+  <div class="flex flex-1 overflow-hidden">
+
+    <!-- ══ LEFT: Products Panel ══ -->
+    <div class="flex flex-col flex-1 overflow-hidden border-r border-gray-800">
+
+      <!-- Search -->
+      <div class="px-4 pt-3 pb-2 shrink-0">
+        <div class="relative">
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+          <input
+            x-ref="searchInput"
+            x-model="search"
+            type="text"
+            placeholder="Search product or scan barcode..."
+            class="w-full bg-gray-800 border border-gray-700 rounded-lg py-2.5 pl-9 pr-4 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+          />
+          <template x-if="search">
+            <button @click="search=''" class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </template>
+        </div>
+      </div>
+
+      <!-- Categories -->
+      <div class="px-4 pb-2 shrink-0">
+        <div class="flex gap-2 flex-wrap">
+          <template x-for="cat in categories" :key="cat">
+            <button
+              @click="selectedCategory = cat"
+              :class="selectedCategory === cat
+                ? 'bg-blue-600 text-white border-blue-600'
+                : 'bg-transparent text-gray-400 border-gray-700 hover:border-gray-500 hover:text-gray-300'"
+              class="text-xs font-medium px-3 py-1.5 rounded-full border transition-all"
+              x-text="cat"
+            ></button>
+          </template>
+        </div>
+      </div>
+
+      <!-- Product Grid -->
+      <div class="flex-1 overflow-y-auto px-4 pb-3">
+        <template x-if="filteredProducts.length === 0">
+          <div class="flex flex-col items-center justify-center h-40 text-gray-600">
+            <svg class="w-8 h-8 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <span class="text-sm" x-text="`No products matching '${search}'`"></span>
+          </div>
+        </template>
+
+        <div class="grid grid-cols-3 gap-2.5" x-show="filteredProducts.length > 0">
+          <template x-for="p in filteredProducts" :key="p.id">
+            <button
+              @click="addToCart(p)"
+              :class="cartQty(p.id) > 0
+                ? 'bg-blue-950/60 border-blue-500'
+                : 'bg-gray-800/70 border-gray-700 hover:border-gray-500 hover:bg-gray-800'"
+              class="relative text-left rounded-xl border p-3 transition-all cursor-pointer group min-h-[84px] flex flex-col justify-between"
+            >
+              <!-- In-cart badge -->
+              <template x-if="cartQty(p.id) > 0">
+                <span class="absolute top-2 right-2 bg-green-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none" x-text="`×${cartQty(p.id)}`"></span>
+              </template>
+
+              <div>
+                <p class="text-sm font-medium text-gray-100 leading-snug line-clamp-2" x-text="p.name"></p>
+              </div>
+              <div class="flex items-end justify-between mt-2">
+                <span class="text-blue-400 font-bold text-sm" x-text="`Rs ${p.price.toLocaleString()}`"></span>
+                <span class="text-[10px] text-gray-600 group-hover:text-gray-500" x-text="p.unit"></span>
+              </div>
+            </button>
+          </template>
+        </div>
+      </div>
+
+      <!-- Bottom Stats Bar -->
+      <div class="border-t border-gray-800 bg-gray-900/50 px-4 py-2.5 shrink-0">
+        <div class="grid grid-cols-4 gap-0 divide-x divide-gray-800">
+          <div class="text-center pr-4">
+            <p class="text-base font-bold text-gray-100" x-text="products.length"></p>
+            <p class="text-[11px] text-gray-500">Products</p>
+          </div>
+          <div class="text-center px-4">
+            <p class="text-base font-bold text-green-400">142</p>
+            <p class="text-[11px] text-gray-500">Sales Today</p>
+          </div>
+          <div class="text-center px-4">
+            <p class="text-base font-bold text-gray-100">Rs 68,450</p>
+            <p class="text-[11px] text-gray-500">Revenue Today</p>
+          </div>
+          <div class="text-center pl-4">
+            <p class="text-base font-bold text-amber-400">3</p>
+            <p class="text-[11px] text-gray-500">Low Stock</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══ RIGHT: Cart Panel ══ -->
+    <div class="flex flex-col bg-gray-900" style="width:340px; flex-shrink:0;">
+
+      <!-- Cart Header -->
+      <div class="flex items-center gap-2 px-4 py-3 border-b border-gray-800 shrink-0">
+        <span class="font-semibold text-sm">Current Sale</span>
+        <template x-if="totalItems > 0">
+          <span class="bg-blue-600 text-white text-xs font-bold px-2 py-0.5 rounded-full" x-text="`${totalItems} items`"></span>
+        </template>
+        <div class="ml-auto flex gap-2">
+          <!-- Customer selector -->
+          <button
+            @click="showCustomer = !showCustomer"
+            :class="selectedCustomer ? 'border-blue-500 text-blue-400' : 'border-gray-700 text-gray-400'"
+            class="flex items-center gap-1.5 text-xs border rounded-lg px-2.5 py-1.5 hover:border-gray-500 transition-colors"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+            <span x-text="selectedCustomer ? selectedCustomer.name : 'Customer'"></span>
+          </button>
+          <template x-if="cart.length > 0">
+            <button @click="clearCart()" class="text-xs text-gray-500 hover:text-red-400 transition-colors">Clear</button>
+          </template>
+        </div>
+      </div>
+
+      <!-- Customer dropdown -->
+      <div x-show="showCustomer" x-cloak class="border-b border-gray-800 px-4 py-3 bg-gray-800/50 shrink-0">
+        <p class="text-xs text-gray-500 mb-2 font-medium">Select Customer</p>
+        <div class="flex flex-col gap-1">
+          <template x-for="c in customers" :key="c.id">
+            <button
+              @click="selectedCustomer = c; showCustomer = false;"
+              :class="selectedCustomer?.id === c.id ? 'border-blue-500 bg-blue-950/40' : 'border-gray-700 hover:border-gray-600'"
+              class="flex items-center justify-between rounded-lg border px-3 py-2 text-left transition-all"
+            >
+              <div>
+                <p class="text-xs font-medium" x-text="c.name"></p>
+                <p class="text-[11px] text-gray-500" x-text="c.phone"></p>
+              </div>
+              <div class="text-right">
+                <p class="text-[11px]" :class="c.balance > 0 ? 'text-red-400' : 'text-green-400'"
+                   x-text="c.balance > 0 ? `Udhaar: Rs ${c.balance.toLocaleString()}` : 'No dues'"></p>
+              </div>
+            </button>
+          </template>
+          <button @click="selectedCustomer = null; showCustomer = false" class="text-xs text-gray-500 hover:text-gray-300 text-center py-1">Walk-in Customer</button>
+        </div>
+      </div>
+
+      <!-- Cart Items -->
+      <div class="flex-1 overflow-y-auto">
+
+        <!-- Empty state -->
+        <template x-if="cart.length === 0 && !saleComplete">
+          <div class="flex flex-col items-center justify-center h-full text-gray-600 px-6">
+            <svg class="w-10 h-10 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+            <p class="text-sm font-medium">Cart is empty</p>
+            <p class="text-xs mt-1">Tap a product or scan barcode</p>
+          </div>
+        </template>
+
+        <!-- Sale complete -->
+        <template x-if="saleComplete">
+          <div class="p-4">
+            <div class="bg-green-950/40 border border-green-700/50 rounded-xl p-5 text-center">
+              <div class="w-12 h-12 rounded-full bg-green-900/50 flex items-center justify-center mx-auto mb-3">
+                <svg class="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+              </div>
+              <p class="font-bold text-green-400 text-base">Sale Complete!</p>
+              <p class="text-gray-400 text-xs mt-1 mb-4">Receipt is ready</p>
+              <div class="flex gap-2 justify-center">
+                <button @click="saleComplete=false" class="flex items-center gap-1.5 bg-gray-700 hover:bg-gray-600 text-sm text-white px-3 py-2 rounded-lg transition-colors">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                  Print
+                </button>
+                <button @click="saleComplete=false" class="flex items-center gap-1.5 bg-green-700 hover:bg-green-600 text-sm text-white px-3 py-2 rounded-lg transition-colors">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/></svg>
+                  WhatsApp
+                </button>
+              </div>
+            </div>
+          </div>
+        </template>
+
+        <!-- Cart items list -->
+        <div class="px-4 py-2" x-show="cart.length > 0">
+          <template x-for="(item, idx) in cart" :key="item.id">
+            <div
+              :class="idx < cart.length - 1 ? 'border-b border-gray-800' : ''"
+              class="py-3 flex items-center gap-3"
+            >
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium truncate" x-text="item.name"></p>
+                <p class="text-xs text-gray-500 mt-0.5" x-text="`Rs ${item.price.toLocaleString()} / unit`"></p>
+              </div>
+              <div class="flex items-center gap-1.5 shrink-0">
+                <button
+                  @click="updateQty(item.id, -1)"
+                  class="w-7 h-7 rounded-md bg-gray-800 hover:bg-gray-700 flex items-center justify-center text-gray-300 transition-colors text-base font-bold"
+                >−</button>
+                <span class="w-7 text-center text-sm font-bold" x-text="item.qty"></span>
+                <button
+                  @click="updateQty(item.id, 1)"
+                  class="w-7 h-7 rounded-md bg-gray-800 hover:bg-gray-700 flex items-center justify-center text-gray-300 transition-colors text-base font-bold"
+                >+</button>
+              </div>
+              <div class="text-right shrink-0 w-20">
+                <span class="text-sm font-semibold" x-text="`Rs ${(item.price * item.qty).toLocaleString()}`"></span>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- ── Totals + Payment + Charge ── -->
+      <div class="border-t border-gray-800 px-4 pt-3 pb-4 shrink-0 bg-gray-900">
+
+        <!-- Totals -->
+        <div class="space-y-1.5 mb-3 text-sm">
+          <div class="flex justify-between text-gray-400">
+            <span>Subtotal</span>
+            <span x-text="`Rs ${subtotal.toLocaleString()}`"></span>
+          </div>
+          <div class="flex justify-between text-gray-500">
+            <span>Discount</span>
+            <span>Rs 0</span>
+          </div>
+          <div class="flex justify-between text-gray-500">
+            <span>Tax (0%)</span>
+            <span>Rs 0</span>
+          </div>
+        </div>
+
+        <div class="border-t border-gray-700 pt-2.5 mb-3">
+          <div class="flex items-baseline justify-between">
+            <span class="font-bold text-sm">Total Payable</span>
+            <span class="text-blue-400 font-bold text-xl" x-text="`Rs ${subtotal.toLocaleString()}`"></span>
+          </div>
+          <template x-if="subtotal > 0 && payment === 'Cash'">
+            <div class="mt-2 flex items-center gap-2">
+              <span class="text-xs text-gray-500">Cash received:</span>
+              <input
+                x-model.number="cashReceived"
+                type="number"
+                class="w-28 bg-gray-800 border border-gray-700 rounded-md px-2 py-1 text-sm text-right focus:outline-none focus:border-blue-500"
+                :placeholder="`${subtotal}`"
+              />
+              <template x-if="cashReceived >= subtotal">
+                <span class="text-xs text-green-400 font-medium" x-text="`Change: Rs ${(cashReceived - subtotal).toLocaleString()}`"></span>
+              </template>
+            </div>
+          </template>
+        </div>
+
+        <!-- Payment Methods -->
+        <div class="mb-3">
+          <p class="text-xs text-gray-500 font-medium mb-1.5">Payment Method</p>
+          <div class="flex flex-wrap gap-1.5">
+            <template x-for="m in paymentMethods" :key="m.id">
+              <button
+                @click="payment = m.id"
+                :class="payment === m.id
+                  ? 'bg-blue-600 border-blue-600 text-white'
+                  : 'bg-transparent border-gray-700 text-gray-400 hover:border-gray-500'"
+                class="text-xs font-medium px-3 py-1.5 rounded-full border transition-all"
+                x-text="m.label"
+              ></button>
+            </template>
+          </div>
+          <template x-if="payment === 'udhaar' && !selectedCustomer">
+            <p class="text-amber-400 text-xs mt-2 flex items-center gap-1">
+              <svg class="w-3.5 h-3.5 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+              Select a customer for credit sale
+            </p>
+          </template>
+          <template x-if="payment === 'udhaar' && selectedCustomer">
+            <p class="text-amber-400 text-xs mt-2">
+              Credit will be added to <span class="font-semibold" x-text="selectedCustomer.name"></span>'s ledger
+            </p>
+          </template>
+        </div>
+
+        <!-- Charge Button -->
+        <button
+          @click="charge()"
+          :disabled="cart.length === 0 || (payment === 'udhaar' && !selectedCustomer)"
+          :class="cart.length === 0 || (payment === 'udhaar' && !selectedCustomer)
+            ? 'bg-gray-800 text-gray-600 cursor-not-allowed'
+            : 'bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white cursor-pointer'"
+          class="w-full py-3 rounded-xl font-semibold text-sm transition-all"
+        >
+          <template x-if="cart.length === 0">
+            <span>Add items to start a sale</span>
+          </template>
+          <template x-if="cart.length > 0">
+            <span x-text="`Charge Rs ${subtotal.toLocaleString()} — ${paymentMethods.find(m=>m.id===payment)?.label}`"></span>
+          </template>
+        </button>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Toast notification ── -->
+  <div
+    x-show="toast.show"
+    x-cloak
+    x-transition:enter="transition ease-out duration-200"
+    x-transition:enter-start="opacity-0 translate-y-2"
+    x-transition:enter-end="opacity-100 translate-y-0"
+    x-transition:leave="transition ease-in duration-150"
+    x-transition:leave-start="opacity-100"
+    x-transition:leave-end="opacity-0"
+    class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-800 border border-gray-700 text-sm text-gray-100 px-4 py-2.5 rounded-xl z-50 pointer-events-none"
+    x-text="toast.message"
+  ></div>
+
+</div>
+
+<script>
+function pos() {
+  return {
+    search: '',
+    selectedCategory: 'All',
+    cart: [],
+    payment: 'cash',
+    cashReceived: '',
+    selectedCustomer: null,
+    showCustomer: false,
+    saleComplete: false,
+    currentTime: '',
+    toast: { show: false, message: '' },
+
+    categories: ['All', 'Grocery', 'Dairy', 'Drinks', 'Snacks'],
+
+    paymentMethods: [
+      { id: 'cash',      label: 'Cash'      },
+      { id: 'jazzcash',  label: 'JazzCash'  },
+      { id: 'easypaisa', label: 'Easypaisa' },
+      { id: 'udhaar',    label: 'Udhaar'    },
+    ],
+
+    customers: [
+      { id: 1, name: 'Khalid Mehmood',  phone: '0300-1234567', balance: 2450  },
+      { id: 2, name: 'Asif Rasheed',    phone: '0333-9876543', balance: 0     },
+      { id: 3, name: 'Nasreen Bibi',    phone: '0321-5551234', balance: 800   },
+    ],
+
+    products: [
+      { id: 1,  name: 'Basmati Rice 5kg',   price: 950,  category: 'Grocery', unit: 'bag'   },
+      { id: 2,  name: 'Cooking Oil 1L',      price: 450,  category: 'Grocery', unit: 'bottle'},
+      { id: 3,  name: 'Sugar 1kg',           price: 175,  category: 'Grocery', unit: 'kg'    },
+      { id: 4,  name: 'Green Tea 500g',      price: 280,  category: 'Grocery', unit: 'pack'  },
+      { id: 5,  name: 'Wheat Flour 10kg',    price: 1200, category: 'Grocery', unit: 'bag'   },
+      { id: 6,  name: 'Shaan Masala 100g',   price: 95,   category: 'Grocery', unit: 'pack'  },
+      { id: 7,  name: 'Olper Milk 1L',       price: 180,  category: 'Dairy',   unit: 'pack'  },
+      { id: 8,  name: 'Desi Yogurt 400g',    price: 120,  category: 'Dairy',   unit: 'cup'   },
+      { id: 9,  name: 'Eggs 12pc',           price: 240,  category: 'Dairy',   unit: 'dozen' },
+      { id: 10, name: 'Butter 200g',         price: 320,  category: 'dairy',   unit: 'block' },
+      { id: 11, name: 'Pepsi 1.5L',          price: 130,  category: 'Drinks',  unit: 'bottle'},
+      { id: 12, name: 'Mineral Water 1.5L',  price: 55,   category: 'Drinks',  unit: 'bottle'},
+      { id: 13, name: 'Tapal Danedar 190g',  price: 230,  category: 'Drinks',  unit: 'pack'  },
+      { id: 14, name: 'Lays Classic 100g',   price: 65,   category: 'Snacks',  unit: 'pack'  },
+      { id: 15, name: 'Marie Biscuits 200g', price: 85,   category: 'Snacks',  unit: 'pack'  },
+      { id: 16, name: 'Nimko Mix 250g',      price: 110,  category: 'Snacks',  unit: 'pack'  },
+    ],
+
+    get filteredProducts() {
+      return this.products.filter(p => {
+        const matchCat = this.selectedCategory === 'All' || p.category.toLowerCase() === this.selectedCategory.toLowerCase();
+        const matchSearch = this.search === '' || p.name.toLowerCase().includes(this.search.toLowerCase());
+        return matchCat && matchSearch;
+      });
+    },
+
+    get subtotal() {
+      return this.cart.reduce((s, i) => s + i.price * i.qty, 0);
+    },
+
+    get totalItems() {
+      return this.cart.reduce((s, i) => s + i.qty, 0);
+    },
+
+    cartQty(id) {
+      return this.cart.find(i => i.id === id)?.qty ?? 0;
+    },
+
+    addToCart(p) {
+      this.saleComplete = false;
+      const existing = this.cart.find(i => i.id === p.id);
+      if (existing) {
+        existing.qty++;
+      } else {
+        this.cart.push({ id: p.id, name: p.name, price: p.price, qty: 1 });
+      }
+      this.showToast(`${p.name} added`);
+    },
+
+    updateQty(id, delta) {
+      const item = this.cart.find(i => i.id === id);
+      if (!item) return;
+      item.qty += delta;
+      if (item.qty <= 0) this.cart = this.cart.filter(i => i.id !== id);
+    },
+
+    clearCart() {
+      this.cart = [];
+      this.saleComplete = false;
+      this.cashReceived = '';
+      this.selectedCustomer = null;
+    },
+
+    charge() {
+      if (this.cart.length === 0) return;
+      if (this.payment === 'udhaar' && !this.selectedCustomer) return;
+      this.saleComplete = true;
+      this.cart = [];
+      this.cashReceived = '';
+    },
+
+    handleKeydown(e) {
+      if (e.key === 'F1') { e.preventDefault(); this.$refs.searchInput?.focus(); }
+      if (e.key === 'Escape') { this.search = ''; this.showCustomer = false; }
+    },
+
+    showToast(message) {
+      this.toast = { show: true, message };
+      setTimeout(() => { this.toast.show = false; }, 1800);
+    },
+
+    init() {
+      const tick = () => {
+        const now = new Date();
+        this.currentTime = now.toLocaleDateString('en-PK', { weekday:'short', day:'numeric', month:'short', year:'numeric' })
+          + ' — '
+          + now.toLocaleTimeString('en-PK', { hour:'2-digit', minute:'2-digit' });
+      };
+      tick();
+      setInterval(tick, 30000);
+    },
+  };
+}
+</script>
+</body>
+</html>
