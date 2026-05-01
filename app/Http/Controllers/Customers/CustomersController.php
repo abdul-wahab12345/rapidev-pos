@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Customers;
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\CustomerLedgerEntry;
+use App\Models\Party;
+use App\Models\Supplier;
 use App\Services\AccountingService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -73,6 +75,10 @@ class CustomersController extends Controller
             ->limit(10)
             ->get();
 
+        // Party + linked supplier info
+        $party    = $customer->party_id ? $customer->party()->with('supplier')->first() : null;
+        $supplier = $party?->supplier;
+
         return Inertia::render('Customers/Show', [
             'customer' => [
                 'id'              => $customer->id,
@@ -85,7 +91,13 @@ class CustomersController extends Controller
                 'credit_limit'    => (float) $customer->credit_limit,
                 'total_spend'     => (float) $customer->total_spend,
                 'created_at'      => $customer->created_at,
+                'party_id'        => $customer->party_id,
             ],
+            'linked_supplier' => $supplier ? [
+                'id'              => $supplier->id,
+                'current_balance' => (float) $supplier->current_balance,
+                'is_active'       => $supplier->is_active,
+            ] : null,
             'ledger' => [
                 'data'         => collect($ledger->items())->map(fn ($e) => [
                     'id'              => $e->id,
@@ -130,16 +142,30 @@ class CustomersController extends Controller
             'credit_limit' => 'nullable|numeric|min:0',
         ]);
 
-        Customer::create([
-            'name'         => $validated['name'],
-            'phone'        => $validated['phone'] ?? null,
-            'cnic'         => $validated['cnic'] ?? null,
-            'address'      => $validated['address'] ?? null,
-            'notes'        => $validated['notes'] ?? null,
-            'credit_limit' => isset($validated['credit_limit']) ? (float) $validated['credit_limit'] : 0,
-            'current_balance' => 0,
-            'total_spend'     => 0,
-        ]);
+        DB::transaction(function () use ($validated) {
+            $party = Party::create([
+                'tenant_id'   => auth()->user()->tenant_id,
+                'name'        => $validated['name'],
+                'phone'       => $validated['phone'] ?? null,
+                'cnic'        => $validated['cnic'] ?? null,
+                'address'     => $validated['address'] ?? null,
+                'notes'       => $validated['notes'] ?? null,
+                'is_customer' => true,
+                'is_supplier' => false,
+            ]);
+
+            Customer::create([
+                'party_id'        => $party->id,
+                'name'            => $validated['name'],
+                'phone'           => $validated['phone'] ?? null,
+                'cnic'            => $validated['cnic'] ?? null,
+                'address'         => $validated['address'] ?? null,
+                'notes'           => $validated['notes'] ?? null,
+                'credit_limit'    => isset($validated['credit_limit']) ? (float) $validated['credit_limit'] : 0,
+                'current_balance' => 0,
+                'total_spend'     => 0,
+            ]);
+        });
 
         return redirect()->route('customers.index')->with('success', 'Customer added successfully.');
     }
@@ -239,5 +265,68 @@ class CustomersController extends Controller
         }
 
         return back()->with('success', 'Payment of Rs ' . number_format($amount) . ' recorded.');
+    }
+
+    public function enableSupplier(Customer $customer): RedirectResponse
+    {
+        if (! $customer->party_id) {
+            // Backfill a party for legacy customers that pre-date this feature
+            $party = DB::transaction(function () use ($customer) {
+                $p = Party::create([
+                    'tenant_id'   => $customer->tenant_id,
+                    'name'        => $customer->name,
+                    'phone'       => $customer->phone,
+                    'cnic'        => $customer->cnic,
+                    'address'     => $customer->address,
+                    'notes'       => $customer->notes,
+                    'is_customer' => true,
+                    'is_supplier' => true,
+                ]);
+                $customer->update(['party_id' => $p->id]);
+                return $p;
+            });
+        } else {
+            $party = $customer->party;
+            if ($party->is_supplier && $party->supplier()->withTrashed()->exists()) {
+                $party->supplier()->withTrashed()->restore();
+                $party->update(['is_supplier' => true]);
+                return back()->with('success', "{$customer->name} re-enabled as a supplier.");
+            }
+            $party->update(['is_supplier' => true]);
+        }
+
+        Supplier::create([
+            'tenant_id'       => $customer->tenant_id,
+            'party_id'        => $customer->party_id ?? $party->id,
+            'name'            => $customer->name,
+            'phone'           => $customer->phone,
+            'opening_balance' => 0,
+            'current_balance' => 0,
+            'is_active'       => true,
+        ]);
+
+        return back()->with('success', "{$customer->name} is now also a supplier.");
+    }
+
+    public function disableSupplier(Customer $customer): RedirectResponse
+    {
+        $party = $customer->party;
+
+        if (! $party || ! $party->is_supplier) {
+            return back()->with('error', 'This customer is not linked as a supplier.');
+        }
+
+        $supplier = $party->supplier;
+
+        if ($supplier && (float) $supplier->current_balance > 0) {
+            return back()->with('error', 'Cannot remove supplier link while there is an outstanding payable balance.');
+        }
+
+        DB::transaction(function () use ($party, $supplier) {
+            $supplier?->delete();
+            $party->update(['is_supplier' => false]);
+        });
+
+        return back()->with('success', 'Supplier link removed.');
     }
 }

@@ -6,7 +6,7 @@ import { paymentBadge, ledgerTypeBadge } from '@/constants/badges';
 import type { BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import {
-    ArrowLeft, BookOpen, CreditCard, Edit, Phone,
+    ArrowLeft, BookOpen, Building2, CreditCard, Edit, Phone,
     ShoppingBag, Trash2, Wallet,
 } from 'lucide-vue-next';
 import { ref } from 'vue';
@@ -43,10 +43,18 @@ interface Customer {
     credit_limit: number;
     total_spend: number;
     created_at: string;
+    party_id: string | null;
+}
+
+interface LinkedSupplier {
+    id: string;
+    current_balance: number;
+    is_active: boolean;
 }
 
 const props = defineProps<{
     customer: Customer;
+    linked_supplier: LinkedSupplier | null;
     ledger: {
         data: LedgerEntry[];
         current_page: number;
@@ -79,6 +87,25 @@ function submitPayment() {
             showPaymentModal.value = false;
             paymentForm.reset();
         },
+    });
+}
+
+// ── Supplier toggle ───────────────────────────────────────────
+const supplierLoading = ref(false);
+
+function enableSupplier() {
+    supplierLoading.value = true;
+    router.post(route('customers.enable-supplier', props.customer.id), {}, {
+        preserveScroll: true,
+        onFinish: () => { supplierLoading.value = false; },
+    });
+}
+
+function disableSupplier() {
+    supplierLoading.value = true;
+    router.post(route('customers.disable-supplier', props.customer.id), {}, {
+        preserveScroll: true,
+        onFinish: () => { supplierLoading.value = false; },
     });
 }
 
@@ -262,6 +289,63 @@ const typeLabel = ledgerTypeBadge;
                                 </div>
                             </Link>
                         </div>
+                    </div>
+
+                    <!-- Also a Supplier card -->
+                    <div class="rounded-xl border border-border bg-card p-4">
+                        <div class="mb-3 flex items-center gap-2">
+                            <Building2 class="h-4 w-4 text-muted-foreground" />
+                            <h2 class="font-semibold text-foreground">Supplier Link</h2>
+                        </div>
+
+                        <!-- Active supplier -->
+                        <template v-if="linked_supplier">
+                            <div class="mb-3 space-y-1 text-sm">
+                                <div class="flex justify-between">
+                                    <span class="text-muted-foreground">Payable balance</span>
+                                    <span class="font-semibold" :class="linked_supplier.current_balance > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-muted-foreground'">
+                                        {{ linked_supplier.current_balance > 0 ? fmt(linked_supplier.current_balance) : 'Clear' }}
+                                    </span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span class="text-muted-foreground">Net position</span>
+                                    <span class="font-bold" :class="(customer.current_balance - linked_supplier.current_balance) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'">
+                                        {{ fmt(customer.current_balance - linked_supplier.current_balance) }}
+                                    </span>
+                                </div>
+                            </div>
+                            <div class="flex gap-2">
+                                <Link
+                                    v-if="customer.party_id"
+                                    :href="route('parties.show', customer.party_id)"
+                                    class="flex-1 rounded-lg border border-border px-3 py-2 text-center text-xs font-medium text-foreground hover:bg-accent transition-colors"
+                                >
+                                    View Net Balance
+                                </Link>
+                                <button
+                                    @click="disableSupplier"
+                                    :disabled="supplierLoading || linked_supplier.current_balance > 0"
+                                    class="rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground hover:border-destructive/50 hover:text-destructive transition-colors disabled:opacity-40"
+                                    :title="linked_supplier.current_balance > 0 ? 'Cannot remove: outstanding balance' : 'Remove supplier link'"
+                                >
+                                    Remove
+                                </button>
+                            </div>
+                        </template>
+
+                        <!-- Not yet a supplier -->
+                        <template v-else>
+                            <p class="mb-3 text-xs text-muted-foreground">
+                                This customer is not linked as a supplier. Enable to track purchase orders and AP balance under the same contact.
+                            </p>
+                            <button
+                                @click="enableSupplier"
+                                :disabled="supplierLoading"
+                                class="w-full rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-60"
+                            >
+                                {{ supplierLoading ? 'Enabling…' : 'Enable as Supplier' }}
+                            </button>
+                        </template>
                     </div>
 
                     <!-- Notes -->

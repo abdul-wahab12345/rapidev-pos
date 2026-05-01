@@ -3,12 +3,13 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Customer extends TenantAware
 {
     protected $fillable = [
-        'tenant_id', 'name', 'phone', 'cnic', 'address', 'notes',
+        'tenant_id', 'party_id', 'name', 'phone', 'cnic', 'address', 'notes',
         'current_balance', 'credit_limit', 'total_spend',
     ];
 
@@ -17,6 +18,11 @@ class Customer extends TenantAware
         'credit_limit'    => 'decimal:2',
         'total_spend'     => 'decimal:2',
     ];
+
+    public function party(): BelongsTo
+    {
+        return $this->belongsTo(Party::class, 'party_id');
+    }
 
     public function sales(): HasMany
     {

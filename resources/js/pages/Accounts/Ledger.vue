@@ -133,14 +133,14 @@ const totalCredit = computed(() => props.lines.reduce((s, l) => s + l.credit, 0)
                 <div>
                     <p class="text-xs text-muted-foreground">Opening Balance</p>
                     <p class="font-semibold tabular-nums" :class="opening_balance < 0 ? 'text-red-500' : 'text-foreground'">
-                        Rs {{ formatMoney(Math.abs(opening_balance)) }}
+                        {{ formatMoney(Math.abs(opening_balance)) }}
                         <span class="text-xs text-muted-foreground ml-1">{{ opening_balance < 0 ? 'Cr' : 'Dr' }}</span>
                     </p>
                 </div>
                 <div>
                     <p class="text-xs text-muted-foreground">Closing Balance</p>
                     <p class="font-semibold tabular-nums" :class="closingBalance < 0 ? 'text-red-500' : 'text-emerald-600 dark:text-emerald-400'">
-                        Rs {{ formatMoney(Math.abs(closingBalance)) }}
+                        {{ formatMoney(Math.abs(closingBalance)) }}
                         <span class="text-xs text-muted-foreground ml-1">{{ closingBalance < 0 ? 'Cr' : 'Dr' }}</span>
                     </p>
                 </div>
@@ -171,7 +171,7 @@ const totalCredit = computed(() => props.lines.reduce((s, l) => s + l.credit, 0)
                                     Opening Balance (before {{ filters.from }})
                                 </td>
                                 <td class="px-4 py-2.5 text-right text-xs font-semibold tabular-nums text-muted-foreground">
-                                    Rs {{ formatMoney(Math.abs(opening_balance)) }}
+                                    {{ formatMoney(Math.abs(opening_balance)) }}
                                 </td>
                             </tr>
 
@@ -194,14 +194,14 @@ const totalCredit = computed(() => props.lines.reduce((s, l) => s + l.credit, 0)
                                     </span>
                                 </td>
                                 <td class="px-4 py-2.5 text-right tabular-nums text-emerald-600 dark:text-emerald-400 font-medium">
-                                    {{ line.debit > 0 ? 'Rs ' + formatMoney(line.debit) : '—' }}
+                                    {{ line.debit > 0 ? formatMoney(line.debit) : '—' }}
                                 </td>
                                 <td class="px-4 py-2.5 text-right tabular-nums text-amber-600 dark:text-amber-400 font-medium">
-                                    {{ line.credit > 0 ? 'Rs ' + formatMoney(line.credit) : '—' }}
+                                    {{ line.credit > 0 ? formatMoney(line.credit) : '—' }}
                                 </td>
                                 <td class="px-4 py-2.5 text-right tabular-nums font-semibold"
                                     :class="line.balance < 0 ? 'text-red-500' : 'text-foreground'">
-                                    Rs {{ formatMoney(Math.abs(line.balance)) }}
+                                    {{ formatMoney(Math.abs(line.balance)) }}
                                     <span class="text-[10px] text-muted-foreground ml-0.5">{{ line.balance < 0 ? 'Cr' : 'Dr' }}</span>
                                 </td>
                             </tr>
@@ -212,13 +212,13 @@ const totalCredit = computed(() => props.lines.reduce((s, l) => s + l.credit, 0)
                             <tr>
                                 <td colspan="4" class="px-4 py-3 font-bold text-foreground text-sm">Period Totals</td>
                                 <td class="px-4 py-3 text-right font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
-                                    Rs {{ formatMoney(totalDebit) }}
+                                    {{ formatMoney(totalDebit) }}
                                 </td>
                                 <td class="px-4 py-3 text-right font-bold tabular-nums text-amber-600 dark:text-amber-400">
-                                    Rs {{ formatMoney(totalCredit) }}
+                                    {{ formatMoney(totalCredit) }}
                                 </td>
                                 <td class="px-4 py-3 text-right font-bold tabular-nums text-foreground">
-                                    Rs {{ formatMoney(Math.abs(closingBalance)) }}
+                                    {{ formatMoney(Math.abs(closingBalance)) }}
                                     <span class="text-xs text-muted-foreground ml-1">{{ closingBalance < 0 ? 'Cr' : 'Dr' }}</span>
                                 </td>
                             </tr>

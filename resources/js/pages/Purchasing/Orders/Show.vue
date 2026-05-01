@@ -66,6 +66,13 @@ function submitReceive() {
     });
 }
 
+// One-click: mark ALL items as fully received without opening the modal
+const quickReceiveForm = useForm({ items: props.order.items.map(i => ({ id: i.id, quantity_received: i.quantity_ordered })) });
+function quickReceiveAll() {
+    if (!confirm(`Mark all items in ${props.order.po_number} as fully received?`)) return;
+    quickReceiveForm.post(`/purchasing/orders/${props.order.id}/receive`);
+}
+
 // Pay
 const showPay    = ref(false);
 const payForm    = useForm({ amount: props.order.amount_due, payment_method: 'cash', notes: '' });
@@ -120,8 +127,20 @@ function fmt(n: number) {
                 </div>
 
                 <div class="flex gap-2 flex-wrap justify-end">
-                    <Button v-if="canReceive" @click="showReceive = true" class="gap-2">
-                        <Truck :size="15" /> Receive Stock
+                    <!-- Quick receive: one click, no modal -->
+                    <Button
+                        v-if="canReceive"
+                        @click="quickReceiveAll"
+                        :disabled="quickReceiveForm.processing"
+                        variant="default"
+                        class="gap-2 bg-emerald-600 hover:bg-emerald-500"
+                    >
+                        <Truck :size="15" />
+                        {{ quickReceiveForm.processing ? 'Saving…' : 'Mark All Received' }}
+                    </Button>
+                    <!-- Partial / custom quantities -->
+                    <Button v-if="canReceive" variant="outline" @click="showReceive = true" class="gap-2">
+                        <Truck :size="15" /> Partial Receive
                     </Button>
                     <Button v-if="canPay" variant="outline" @click="showPay = true" class="gap-2">
                         <CreditCard :size="15" /> Record Payment

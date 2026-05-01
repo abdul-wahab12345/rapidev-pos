@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -14,7 +15,7 @@ class Supplier extends Model
     public $incrementing = false;
 
     protected $fillable = [
-        'tenant_id', 'name', 'company', 'phone', 'email', 'address', 'city',
+        'tenant_id', 'party_id', 'name', 'company', 'phone', 'email', 'address', 'city',
         'ntn', 'cnic', 'payment_terms', 'opening_balance', 'current_balance',
         'is_active', 'notes',
     ];
@@ -32,6 +33,11 @@ class Supplier extends Model
                 $s->id = (string) \Illuminate\Support\Str::uuid();
             }
         });
+    }
+
+    public function party(): BelongsTo
+    {
+        return $this->belongsTo(Party::class, 'party_id');
     }
 
     public function purchaseOrders(): HasMany

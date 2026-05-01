@@ -7,8 +7,10 @@ use App\Models\Customer;
 use App\Models\CustomerLedgerEntry;
 use App\Models\Sale;
 use App\Models\StockLevel;
+use App\Models\SaleReturn;
 use App\Models\User;
 use App\Services\AccountingService;
+use App\Services\ReturnService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -105,6 +107,14 @@ class SalesController extends Controller
             'branch:id,name',
         ]);
 
+        // Returns for this sale
+        $existingReturns = SaleReturn::with('items')
+            ->where('sale_id', $sale->id)
+            ->orderByDesc('return_date')
+            ->get();
+
+        $returnedQty = ReturnService::returnedQtyBySaleItem($sale->id);
+
         return Inertia::render('Sales/Show', [
             'sale' => [
                 'id'             => $sale->id,
@@ -131,14 +141,24 @@ class SalesController extends Controller
                 'cashier'  => ['id' => $sale->cashier?->id, 'name' => $sale->cashier?->name],
                 'branch'   => ['id' => $sale->branch?->id,  'name' => $sale->branch?->name],
                 'items'    => $sale->items->map(fn ($i) => [
-                    'id'            => $i->id,
-                    'product_name'  => $i->product_name,
-                    'variant_label' => $i->variant_label,
-                    'quantity'      => $i->quantity,
-                    'unit_price'    => (float) $i->unit_price,
-                    'cost_price'    => (float) $i->cost_price,
-                    'discount'      => (float) $i->discount,
-                    'line_total'    => (float) $i->line_total,
+                    'id'                 => $i->id,
+                    'product_name'       => $i->product_name,
+                    'variant_label'      => $i->variant_label,
+                    'quantity'           => $i->quantity,
+                    'unit_price'         => (float) $i->unit_price,
+                    'cost_price'         => (float) $i->cost_price,
+                    'discount'           => (float) $i->discount,
+                    'line_total'         => (float) $i->line_total,
+                    'quantity_returnable' => $i->quantity - ($returnedQty[$i->id] ?? 0),
+                ]),
+                'returns' => $existingReturns->map(fn ($r) => [
+                    'id'            => $r->id,
+                    'return_number' => $r->return_number,
+                    'return_date'   => $r->return_date->format('Y-m-d'),
+                    'refund_method' => $r->refund_method,
+                    'total_refund'  => $r->total_refund,
+                    'reason'        => $r->reason,
+                    'items_count'   => $r->items->count(),
                 ]),
             ],
         ]);

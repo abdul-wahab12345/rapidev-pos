@@ -197,6 +197,103 @@ class AccountingService
         ]);
     }
 
+    /**
+     * Post a journal entry when a sale return is processed.
+     * Dr Revenue (4010), Cr Cash (1010) / Bank (1020) / Receivable (1030).
+     */
+    public static function postReturn(\App\Models\SaleReturn $return): void
+    {
+        $tenantId = $return->tenant_id;
+        $accounts = self::loadAccounts($tenantId, [self::CASH, self::BANK, self::RECEIVABLE, self::REVENUE]);
+
+        if (!isset($accounts[self::REVENUE])) return;
+
+        $amount = (float) $return->total_refund;
+        if ($amount <= 0) return;
+
+        $creditAccountId = match ($return->refund_method) {
+            'bank'         => $accounts[self::BANK]       ?? $accounts[self::CASH] ?? null,
+            'store_credit' => $accounts[self::RECEIVABLE] ?? null,
+            default        => $accounts[self::CASH]       ?? null,
+        };
+
+        if (!$creditAccountId) return;
+
+        $saleInvoice = $return->sale?->invoice_number ?? $return->sale_id;
+
+        self::createEntry($tenantId, $return->created_by, [
+            'entry_date'     => $return->return_date->format('Y-m-d'),
+            'description'    => "Return {$return->return_number} – {$saleInvoice}",
+            'reference_type' => 'return',
+            'reference_id'   => $return->id,
+            'lines'          => [
+                ['account_id' => $accounts[self::REVENUE], 'debit' => $amount, 'credit' => 0,      'description' => "Revenue reversed – {$return->return_number}"],
+                ['account_id' => $creditAccountId,         'debit' => 0,       'credit' => $amount, 'description' => ucfirst(str_replace('_', ' ', $return->refund_method)) . ' refund'],
+            ],
+        ]);
+    }
+
+    /**
+     * Post a journal entry when an expense is recorded.
+     * Dr Expense Account (5xxx), Cr Cash (1010) or Bank (1020).
+     */
+    public static function postExpense(\App\Models\Expense $expense): void
+    {
+        $tenantId = $expense->tenant_id;
+        $accounts = self::loadAccounts($tenantId, [self::CASH, self::BANK]);
+
+        $creditAccountId = $expense->payment_method === 'bank'
+            ? ($accounts[self::BANK] ?? $accounts[self::CASH] ?? null)
+            : ($accounts[self::CASH] ?? null);
+
+        if (!$creditAccountId) return;
+
+        $amount = (float) $expense->amount;
+
+        self::createEntry($tenantId, $expense->created_by, [
+            'entry_date'     => $expense->expense_date->format('Y-m-d'),
+            'description'    => $expense->description ?? "Expense {$expense->expense_number}",
+            'reference_type' => 'expense',
+            'reference_id'   => $expense->id,
+            'lines'          => [
+                ['account_id' => $expense->account_id, 'debit' => $amount, 'credit' => 0,      'description' => $expense->description ?? $expense->expense_number],
+                ['account_id' => $creditAccountId,     'debit' => 0,       'credit' => $amount, 'description' => ucfirst($expense->payment_method) . ' payment'],
+            ],
+        ]);
+    }
+
+    /**
+     * Reverse an expense journal entry (on delete/update).
+     */
+    public static function reverseExpense(\App\Models\Expense $expense): void
+    {
+        $tenantId = $expense->tenant_id;
+
+        $original = JournalEntry::where('tenant_id', $tenantId)
+            ->where('reference_type', 'expense')
+            ->where('reference_id', $expense->id)
+            ->where('status', 'posted')
+            ->with('lines')
+            ->first();
+
+        if (!$original) return;
+
+        $reversalLines = $original->lines->map(fn ($l) => [
+            'account_id'  => $l->account_id,
+            'debit'       => (float) $l->credit,
+            'credit'      => (float) $l->debit,
+            'description' => 'Reversal: ' . ($l->description ?? ''),
+        ])->toArray();
+
+        self::createEntry($tenantId, auth()->id() ?? $expense->created_by, [
+            'entry_date'     => now()->format('Y-m-d'),
+            'description'    => "Void expense: {$expense->expense_number}",
+            'reference_type' => 'expense_void',
+            'reference_id'   => $expense->id,
+            'lines'          => $reversalLines,
+        ]);
+    }
+
     // ── Private helpers ───────────────────────────────────────────────
 
     private static function loadAccounts(string $tenantId, array $codes): array

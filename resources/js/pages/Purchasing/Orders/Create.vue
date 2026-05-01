@@ -46,6 +46,7 @@ const form = useForm<{
     expected_date: string;
     payment_method: string;
     notes: string;
+    mark_received: boolean;
     items: CartLine[];
 }>({
     supplier_id:    props.supplier_id ?? '',
@@ -53,6 +54,7 @@ const form = useForm<{
     expected_date:  '',
     payment_method: 'credit',
     notes:          '',
+    mark_received:  false,
     items:          [],
 });
 
@@ -156,6 +158,18 @@ function submit() {
                             <Label>Notes</Label>
                             <Input v-model="form.notes" class="mt-1" placeholder="Optional" />
                         </div>
+
+                        <!-- Mark as received on creation -->
+                        <label class="flex items-start gap-3 cursor-pointer rounded-lg border p-3 transition-colors"
+                               :class="form.mark_received ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-border hover:bg-muted/30'">
+                            <input type="checkbox" v-model="form.mark_received" class="mt-0.5 accent-emerald-600" />
+                            <div>
+                                <p class="text-sm font-medium text-foreground">Stock already received</p>
+                                <p class="text-xs text-muted-foreground mt-0.5">
+                                    Mark all items as fully received immediately — stock and accounting will be updated on save.
+                                </p>
+                            </div>
+                        </label>
                     </div>
 
                     <!-- Summary -->
@@ -173,9 +187,14 @@ function submit() {
                             <span>Total</span>
                             <span>{{ fmt(subtotal) }}</span>
                         </div>
-                        <Button type="submit" :disabled="form.processing || !lines.length" class="w-full mt-1 gap-2">
+                        <Button
+                            type="submit"
+                            :disabled="form.processing || !lines.length"
+                            class="w-full mt-1 gap-2"
+                            :class="form.mark_received ? 'bg-emerald-600 hover:bg-emerald-500' : ''"
+                        >
                             <ShoppingCart :size="16" />
-                            Create Purchase Order
+                            {{ form.mark_received ? 'Create & Mark Received' : 'Create Purchase Order' }}
                         </Button>
                     </div>
                 </div>

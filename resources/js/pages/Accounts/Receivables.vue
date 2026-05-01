@@ -37,6 +37,8 @@ interface Payable {
     company: string | null;
     phone: string | null;
     balance: number;
+    ar_balance: number;
+    net_payable: number;
     oldest_po_date: string | null;
     age_days: number | null;
 }
@@ -85,7 +87,7 @@ function fmtDate(d: string | null) {
         <div class="grid grid-cols-2 gap-3 px-4 sm:grid-cols-4 sm:px-6">
             <StatCard
                 label="Total Receivable"
-                :value="'Rs ' + formatMoney(total_receivable)"
+                :value="formatMoney(total_receivable)"
                 :icon="ReceiptText"
                 tone="warning"
                 description="Customers owe you this"
@@ -103,7 +105,7 @@ function fmtDate(d: string | null) {
             />
             <StatCard
                 label="Total Payable"
-                :value="total_payable > 0 ? 'Rs ' + formatMoney(total_payable) : 'Rs 0'"
+                :value="total_payable > 0 ? formatMoney(total_payable) : 'Rs 0'"
                 :icon="Wallet"
                 description="You owe this (via journal entries)"
             />
@@ -136,28 +138,28 @@ function fmtDate(d: string | null) {
             <div class="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3">
                 <p class="text-xs font-medium text-emerald-700 dark:text-emerald-400 uppercase tracking-wide">Current (0–30 days)</p>
                 <p class="mt-1 text-xl font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
-                    Rs {{ formatMoney(current.reduce((s, r) => s + r.balance, 0)) }}
+                    {{ formatMoney(current.reduce((s, r) => s + r.balance, 0)) }}
                 </p>
                 <p class="text-xs text-emerald-600/70 dark:text-emerald-500">{{ current.length }} customer(s)</p>
             </div>
             <div class="rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3">
                 <p class="text-xs font-medium text-amber-700 dark:text-amber-400 uppercase tracking-wide">31–60 days</p>
                 <p class="mt-1 text-xl font-bold tabular-nums text-amber-700 dark:text-amber-400">
-                    Rs {{ formatMoney(days31_60.reduce((s, r) => s + r.balance, 0)) }}
+                    {{ formatMoney(days31_60.reduce((s, r) => s + r.balance, 0)) }}
                 </p>
                 <p class="text-xs text-amber-600/70">{{ days31_60.length }} customer(s)</p>
             </div>
             <div class="rounded-xl border border-orange-500/20 bg-orange-500/5 px-4 py-3">
                 <p class="text-xs font-medium text-orange-700 dark:text-orange-400 uppercase tracking-wide">61–90 days</p>
                 <p class="mt-1 text-xl font-bold tabular-nums text-orange-700 dark:text-orange-400">
-                    Rs {{ formatMoney(days61_90.reduce((s, r) => s + r.balance, 0)) }}
+                    {{ formatMoney(days61_90.reduce((s, r) => s + r.balance, 0)) }}
                 </p>
                 <p class="text-xs text-orange-600/70">{{ days61_90.length }} customer(s)</p>
             </div>
             <div class="rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3">
                 <p class="text-xs font-medium text-red-700 dark:text-red-400 uppercase tracking-wide">Over 90 days</p>
                 <p class="mt-1 text-xl font-bold tabular-nums text-red-600 dark:text-red-400">
-                    Rs {{ formatMoney(over90.reduce((s, r) => s + r.balance, 0)) }}
+                    {{ formatMoney(over90.reduce((s, r) => s + r.balance, 0)) }}
                 </p>
                 <p class="text-xs text-red-500/70">{{ over90.length }} customer(s)</p>
             </div>
@@ -211,7 +213,7 @@ function fmtDate(d: string | null) {
                                     <span v-else class="text-muted-foreground">—</span>
                                 </td>
                                 <td class="px-4 py-3 text-right tabular-nums font-bold text-foreground">
-                                    Rs {{ formatMoney(r.balance) }}
+                                    {{ formatMoney(r.balance) }}
                                 </td>
                                 <td class="px-4 py-3 text-right">
                                     <a
@@ -225,7 +227,7 @@ function fmtDate(d: string | null) {
                             <tr>
                                 <td colspan="4" class="px-4 py-3 font-bold text-foreground">Total Receivable</td>
                                 <td class="px-4 py-3 text-right font-bold tabular-nums text-amber-600 dark:text-amber-400">
-                                    Rs {{ formatMoney(total_receivable) }}
+                                    {{ formatMoney(total_receivable) }}
                                 </td>
                                 <td></td>
                             </tr>
@@ -250,16 +252,18 @@ function fmtDate(d: string | null) {
                         <thead class="border-b border-border bg-muted/40">
                             <tr>
                                 <th class="px-4 py-3 text-left font-medium text-muted-foreground">Supplier</th>
-                                <th class="px-4 py-3 text-left font-medium text-muted-foreground">Phone</th>
-                                <th class="px-4 py-3 text-left font-medium text-muted-foreground">Oldest PO</th>
-                                <th class="px-4 py-3 text-center font-medium text-muted-foreground">Age</th>
-                                <th class="px-4 py-3 text-right font-medium text-muted-foreground">Outstanding</th>
+                                <th class="px-4 py-3 text-left font-medium text-muted-foreground hidden md:table-cell">Phone</th>
+                                <th class="px-4 py-3 text-left font-medium text-muted-foreground hidden lg:table-cell">Oldest PO</th>
+                                <th class="px-4 py-3 text-center font-medium text-muted-foreground hidden lg:table-cell">Age</th>
+                                <th class="px-4 py-3 text-right font-medium text-amber-700 dark:text-amber-400">Payable (AP)</th>
+                                <th class="px-4 py-3 text-right font-medium text-blue-700 dark:text-blue-400 hidden sm:table-cell">Receivable (AR)</th>
+                                <th class="px-4 py-3 text-right font-medium text-foreground">Net</th>
                                 <th class="px-4 py-3 text-right font-medium text-muted-foreground"></th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-border">
                             <tr v-if="payables.length === 0">
-                                <td colspan="6" class="px-4 py-10 text-center text-muted-foreground">
+                                <td colspan="8" class="px-4 py-10 text-center text-muted-foreground">
                                     <CheckCircle2 class="mx-auto mb-2 h-8 w-8 text-emerald-500/50" />
                                     No outstanding supplier payables.
                                 </td>
@@ -276,21 +280,32 @@ function fmtDate(d: string | null) {
                                         <AlertTriangle class="h-3 w-3" /> Overdue
                                     </div>
                                 </td>
-                                <td class="px-4 py-3 text-muted-foreground">{{ p.phone ?? '—' }}</td>
-                                <td class="px-4 py-3 text-muted-foreground text-xs">{{ fmtDate(p.oldest_po_date) }}</td>
-                                <td class="px-4 py-3 text-center">
+                                <td class="px-4 py-3 text-muted-foreground hidden md:table-cell">{{ p.phone ?? '—' }}</td>
+                                <td class="px-4 py-3 text-muted-foreground text-xs hidden lg:table-cell">{{ fmtDate(p.oldest_po_date) }}</td>
+                                <td class="px-4 py-3 text-center hidden lg:table-cell">
                                     <span v-if="p.age_days !== null"
                                         :class="['inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', ageBadge(p.age_days).cls]">
                                         {{ ageBadge(p.age_days).label }}
                                     </span>
                                     <span v-else class="text-muted-foreground">—</span>
                                 </td>
-                                <td class="px-4 py-3 text-right tabular-nums font-bold text-foreground">
-                                    Rs {{ formatMoney(p.balance) }}
+                                <!-- AP actual -->
+                                <td class="px-4 py-3 text-right tabular-nums font-semibold text-amber-600 dark:text-amber-400">
+                                    {{ formatMoney(p.balance) }}
+                                </td>
+                                <!-- AR offset -->
+                                <td class="px-4 py-3 text-right tabular-nums hidden sm:table-cell"
+                                    :class="p.ar_balance > 0 ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground'">
+                                    {{ p.ar_balance > 0 ? formatMoney(p.ar_balance) : '—' }}
+                                </td>
+                                <!-- Net -->
+                                <td class="px-4 py-3 text-right tabular-nums font-bold"
+                                    :class="p.net_payable > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-emerald-600 dark:text-emerald-400'">
+                                    {{ formatMoney(p.net_payable) }}
                                 </td>
                                 <td class="px-4 py-3 text-right">
                                     <a
-                                        :href="`/purchasing/suppliers`"
+                                        :href="route('purchasing.suppliers.show', p.id)"
                                         class="text-xs text-primary hover:underline"
                                     >View →</a>
                                 </td>
@@ -298,9 +313,15 @@ function fmtDate(d: string | null) {
                         </tbody>
                         <tfoot v-if="payables.length > 0" class="border-t-2 border-border bg-muted/30">
                             <tr>
-                                <td colspan="4" class="px-4 py-3 font-bold text-foreground">Total Payable</td>
+                                <td colspan="4" class="px-4 py-3 font-bold text-foreground">Total</td>
+                                <td class="px-4 py-3 text-right font-bold tabular-nums text-amber-600 dark:text-amber-400">
+                                    {{ formatMoney(payables.reduce((s, p) => s + p.balance, 0)) }}
+                                </td>
+                                <td class="px-4 py-3 text-right font-bold tabular-nums text-blue-600 dark:text-blue-400 hidden sm:table-cell">
+                                    {{ formatMoney(payables.reduce((s, p) => s + p.ar_balance, 0)) }}
+                                </td>
                                 <td class="px-4 py-3 text-right font-bold tabular-nums text-orange-600 dark:text-orange-400">
-                                    Rs {{ formatMoney(total_payable) }}
+                                    {{ formatMoney(total_payable) }}
                                 </td>
                                 <td></td>
                             </tr>

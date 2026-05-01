@@ -8,7 +8,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import {
-    Building2, Mail, MapPin, Pencil, Phone, Plus, Search,
+    Building2, Eye, Mail, MapPin, Pencil, Phone, Plus, Search,
     ShoppingCart, Trash2, Users, Wallet, X,
 } from 'lucide-vue-next';
 import { ref, watch } from 'vue';
@@ -27,7 +27,11 @@ interface Supplier {
     city: string | null;
     payment_terms: number;
     current_balance: number;
+    ar_balance: number;
+    net_payable: number;
+    is_also_customer: boolean;
     is_active: boolean;
+    customer_id: string | null;
 }
 
 const props = defineProps<{
@@ -158,14 +162,16 @@ function fmt(n: number) {
                             <th class="px-4 py-3 text-left font-medium hidden md:table-cell">Contact</th>
                             <th class="px-4 py-3 text-left font-medium hidden lg:table-cell">City</th>
                             <th class="px-4 py-3 text-left font-medium hidden md:table-cell">Terms</th>
-                            <th class="px-4 py-3 text-right font-medium">Payable</th>
+                            <th class="px-4 py-3 text-right font-medium text-amber-700 dark:text-amber-400">AP</th>
+                            <th class="px-4 py-3 text-right font-medium text-blue-700 dark:text-blue-400 hidden sm:table-cell">AR</th>
+                            <th class="px-4 py-3 text-right font-medium">Net</th>
                             <th class="px-4 py-3 text-center font-medium">Status</th>
                             <th class="px-4 py-3 text-right font-medium">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y">
                         <tr v-if="suppliers.data.length === 0">
-                            <td colspan="7" class="text-muted-foreground py-12 text-center">
+                            <td colspan="9" class="text-muted-foreground py-12 text-center">
                                 No suppliers found
                             </td>
                         </tr>
@@ -192,10 +198,19 @@ function fmt(n: number) {
                             <td class="px-4 py-3 text-xs hidden md:table-cell">
                                 {{ s.payment_terms }} days
                             </td>
-                            <td class="px-4 py-3 text-right font-medium">
-                                <span :class="s.current_balance > 0 ? 'text-orange-500' : 'text-muted-foreground'">
-                                    {{ fmt(s.current_balance) }}
-                                </span>
+                            <!-- AP actual -->
+                            <td class="px-4 py-3 text-right tabular-nums font-semibold text-amber-600 dark:text-amber-400">
+                                {{ fmt(s.current_balance) }}
+                            </td>
+                            <!-- AR receivable -->
+                            <td class="px-4 py-3 text-right tabular-nums hidden sm:table-cell"
+                                :class="s.ar_balance > 0 ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-muted-foreground'">
+                                {{ s.ar_balance > 0 ? fmt(s.ar_balance) : '—' }}
+                            </td>
+                            <!-- Net -->
+                            <td class="px-4 py-3 text-right tabular-nums font-bold"
+                                :class="s.net_payable > 0 ? 'text-orange-500' : 'text-emerald-600 dark:text-emerald-400'">
+                                {{ fmt(s.net_payable) }}
                             </td>
                             <td class="px-4 py-3 text-center">
                                 <span :class="s.is_active
@@ -207,6 +222,9 @@ function fmt(n: number) {
                             </td>
                             <td class="px-4 py-3">
                                 <div class="flex justify-end gap-1">
+                                    <Button variant="ghost" size="icon" :as="'a'" :href="route('purchasing.suppliers.show', s.id)" title="View details">
+                                        <Eye :size="15" />
+                                    </Button>
                                     <Button variant="ghost" size="icon" @click="openEdit(s)">
                                         <Pencil :size="15" />
                                     </Button>

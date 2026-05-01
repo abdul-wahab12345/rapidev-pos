@@ -85,16 +85,16 @@ const typeStyle: Record<string, { text: string }> = {
 
         <!-- Summary cards -->
         <div class="grid grid-cols-2 gap-3 px-4 sm:grid-cols-4 sm:px-6">
-            <StatCard label="Total Revenue"  :value="'Rs ' + formatMoney(pnl.total_income)"   :icon="TrendingUp"   tone="success" />
-            <StatCard label="Total Expenses" :value="'Rs ' + formatMoney(pnl.total_expenses)" :icon="TrendingDown"  tone="warning" />
+            <StatCard label="Total Revenue"  :value="formatMoney(pnl.total_income)"   :icon="TrendingUp"   tone="success" />
+            <StatCard label="Total Expenses" :value="formatMoney(pnl.total_expenses)" :icon="TrendingDown"  tone="warning" />
             <StatCard
                 label="Net Profit / Loss"
-                :value="'Rs ' + formatMoney(Math.abs(pnl.net_profit))"
+                :value="formatMoney(Math.abs(pnl.net_profit))"
                 :icon="BarChart3"
                 :tone="pnl.net_profit >= 0 ? 'success' : 'danger'"
                 :description="pnl.net_profit >= 0 ? 'Profit' : 'Loss'"
             />
-            <StatCard label="Total Assets"   :value="'Rs ' + formatMoney(balance_sheet.total_assets)" :icon="Landmark" tone="info" />
+            <StatCard label="Total Assets"   :value="formatMoney(balance_sheet.total_assets)" :icon="Landmark" tone="info" />
         </div>
 
         <!-- Tabs -->
@@ -134,7 +134,7 @@ const typeStyle: Record<string, { text: string }> = {
                                 <span class="text-foreground">{{ item.name }}</span>
                             </td>
                             <td class="px-4 py-2.5 text-right font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
-                                Rs {{ formatMoney(item.amount) }}
+                                {{ formatMoney(item.amount) }}
                             </td>
                         </tr>
                     </tbody>
@@ -142,7 +142,7 @@ const typeStyle: Record<string, { text: string }> = {
                         <tr>
                             <td class="px-4 py-3 font-bold text-foreground">Total Income</td>
                             <td class="px-4 py-3 text-right font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
-                                Rs {{ formatMoney(pnl.total_income) }}
+                                {{ formatMoney(pnl.total_income) }}
                             </td>
                         </tr>
                     </tfoot>
@@ -164,7 +164,7 @@ const typeStyle: Record<string, { text: string }> = {
                                 <span class="text-foreground">{{ item.name }}</span>
                             </td>
                             <td class="px-4 py-2.5 text-right font-semibold tabular-nums text-amber-600 dark:text-amber-400">
-                                Rs {{ formatMoney(item.amount) }}
+                                {{ formatMoney(item.amount) }}
                             </td>
                         </tr>
                     </tbody>
@@ -172,7 +172,7 @@ const typeStyle: Record<string, { text: string }> = {
                         <tr>
                             <td class="px-4 py-3 font-bold text-foreground">Total Expenses</td>
                             <td class="px-4 py-3 text-right font-bold tabular-nums text-amber-600 dark:text-amber-400">
-                                Rs {{ formatMoney(pnl.total_expenses) }}
+                                {{ formatMoney(pnl.total_expenses) }}
                             </td>
                         </tr>
                     </tfoot>
@@ -189,7 +189,7 @@ const typeStyle: Record<string, { text: string }> = {
                     <p class="text-xs text-muted-foreground">{{ filters.from }} to {{ filters.to }}</p>
                 </div>
                 <p :class="['text-2xl font-bold tabular-nums', pnl.net_profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500']">
-                    {{ pnl.net_profit < 0 ? '− ' : '' }}Rs {{ formatMoney(Math.abs(pnl.net_profit)) }}
+                    {{ pnl.net_profit < 0 ? '− ' : '' }}{{ formatMoney(Math.abs(pnl.net_profit)) }}
                 </p>
             </div>
         </div>
@@ -207,7 +207,7 @@ const typeStyle: Record<string, { text: string }> = {
                             <td class="px-4 py-2.5">
                                 <span class="font-mono text-xs text-muted-foreground mr-2">{{ item.code }}</span>{{ item.name }}
                             </td>
-                            <td class="px-4 py-2.5 text-right tabular-nums font-medium">Rs {{ formatMoney(item.amount) }}</td>
+                            <td class="px-4 py-2.5 text-right tabular-nums font-medium">{{ formatMoney(item.amount) }}</td>
                         </tr>
                         <tr v-if="balance_sheet.assets.length === 0">
                             <td colspan="2" class="px-4 py-6 text-center text-muted-foreground">No asset balances.</td>
@@ -216,7 +216,7 @@ const typeStyle: Record<string, { text: string }> = {
                     <tfoot class="border-t-2 border-border bg-muted/30">
                         <tr>
                             <td class="px-4 py-3 font-bold">Total Assets</td>
-                            <td class="px-4 py-3 text-right font-bold tabular-nums text-blue-600 dark:text-blue-400">Rs {{ formatMoney(balance_sheet.total_assets) }}</td>
+                            <td class="px-4 py-3 text-right font-bold tabular-nums text-blue-600 dark:text-blue-400">{{ formatMoney(balance_sheet.total_assets) }}</td>
                         </tr>
                     </tfoot>
                 </table>
@@ -232,7 +232,7 @@ const typeStyle: Record<string, { text: string }> = {
                         <tbody class="divide-y divide-border">
                             <tr v-for="item in balance_sheet.liabilities" :key="item.code" class="hover:bg-muted/20">
                                 <td class="px-4 py-2.5"><span class="font-mono text-xs text-muted-foreground mr-2">{{ item.code }}</span>{{ item.name }}</td>
-                                <td class="px-4 py-2.5 text-right tabular-nums font-medium">Rs {{ formatMoney(item.amount) }}</td>
+                                <td class="px-4 py-2.5 text-right tabular-nums font-medium">{{ formatMoney(item.amount) }}</td>
                             </tr>
                             <tr v-if="balance_sheet.liabilities.length === 0">
                                 <td colspan="2" class="px-4 py-4 text-center text-muted-foreground text-xs">No liabilities.</td>
@@ -241,7 +241,7 @@ const typeStyle: Record<string, { text: string }> = {
                         <tfoot class="border-t-2 border-border bg-muted/30">
                             <tr>
                                 <td class="px-4 py-3 font-bold">Total Liabilities</td>
-                                <td class="px-4 py-3 text-right font-bold tabular-nums text-red-600 dark:text-red-400">Rs {{ formatMoney(balance_sheet.total_liabilities) }}</td>
+                                <td class="px-4 py-3 text-right font-bold tabular-nums text-red-600 dark:text-red-400">{{ formatMoney(balance_sheet.total_liabilities) }}</td>
                             </tr>
                         </tfoot>
                     </table>
@@ -255,7 +255,7 @@ const typeStyle: Record<string, { text: string }> = {
                         <tbody class="divide-y divide-border">
                             <tr v-for="item in balance_sheet.equity" :key="item.code" class="hover:bg-muted/20">
                                 <td class="px-4 py-2.5"><span class="font-mono text-xs text-muted-foreground mr-2">{{ item.code }}</span>{{ item.name }}</td>
-                                <td class="px-4 py-2.5 text-right tabular-nums font-medium">Rs {{ formatMoney(item.amount) }}</td>
+                                <td class="px-4 py-2.5 text-right tabular-nums font-medium">{{ formatMoney(item.amount) }}</td>
                             </tr>
                             <tr v-if="balance_sheet.equity.length === 0">
                                 <td colspan="2" class="px-4 py-4 text-center text-muted-foreground text-xs">No equity entries.</td>
@@ -264,7 +264,7 @@ const typeStyle: Record<string, { text: string }> = {
                         <tfoot class="border-t-2 border-border bg-muted/30">
                             <tr>
                                 <td class="px-4 py-3 font-bold">Total Equity</td>
-                                <td class="px-4 py-3 text-right font-bold tabular-nums text-purple-600 dark:text-purple-400">Rs {{ formatMoney(balance_sheet.total_equity) }}</td>
+                                <td class="px-4 py-3 text-right font-bold tabular-nums text-purple-600 dark:text-purple-400">{{ formatMoney(balance_sheet.total_equity) }}</td>
                             </tr>
                         </tfoot>
                     </table>

@@ -325,6 +325,7 @@ class AccountsController extends Controller
         // ── Accounts Payable: suppliers with outstanding balance ──────────
         $payables = \App\Models\Supplier::where('tenant_id', $tenant->id)
             ->where('current_balance', '>', 0)
+            ->with('party.customer')
             ->orderByDesc('current_balance')
             ->get()
             ->map(function ($s) {
@@ -339,18 +340,23 @@ class AccountsController extends Controller
                     ? (int) max(0, now()->startOfDay()->diffInDays(Carbon::parse($oldestPo)->startOfDay()))
                     : null;
 
+                $ap = (float) $s->current_balance;
+                $ar = (float) ($s->party?->customer?->current_balance ?? 0);
+
                 return [
-                    'id'           => $s->id,
-                    'name'         => $s->name,
-                    'company'      => $s->company,
-                    'phone'        => $s->phone,
-                    'balance'      => (float) $s->current_balance,
+                    'id'             => $s->id,
+                    'name'           => $s->name,
+                    'company'        => $s->company,
+                    'phone'          => $s->phone,
+                    'balance'        => $ap,
+                    'ar_balance'     => $ar,
+                    'net_payable'    => max(0, $ap - $ar),
                     'oldest_po_date' => $oldestPo ? Carbon::parse($oldestPo)->format('Y-m-d') : null,
-                    'age_days'     => $ageDays,
+                    'age_days'       => $ageDays,
                 ];
             });
 
-        $totalPayable = $payables->sum('balance');
+        $totalPayable = $payables->sum('net_payable');
 
         $payableAccount = Account::where('tenant_id', $tenant->id)->where('code', '2010')->first();
 

@@ -7,7 +7,10 @@ use App\Http\Controllers\Inventory\StockController;
 use App\Http\Controllers\Pos\PosController;
 use App\Http\Controllers\Sales\SalesController;
 use App\Http\Controllers\BusinessSettingsController;
+use App\Http\Controllers\Parties\PartyController;
 use App\Http\Controllers\Purchasing\SupplierController;
+use App\Http\Controllers\Expenses\ExpenseController;
+use App\Http\Controllers\Returns\ReturnController;
 use App\Http\Controllers\Purchasing\PurchaseOrderController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -42,7 +45,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/{customer}/edit',    [CustomersController::class, 'edit'])->name('edit');
         Route::put('/{customer}',         [CustomersController::class, 'update'])->name('update');
         Route::delete('/{customer}',      [CustomersController::class, 'destroy'])->name('destroy');
-        Route::post('/{customer}/payment',[CustomersController::class, 'recordPayment'])->name('payment');
+        Route::post('/{customer}/payment',         [CustomersController::class, 'recordPayment'])->name('payment');
+        Route::post('/{customer}/enable-supplier',  [CustomersController::class, 'enableSupplier'])->name('enable-supplier');
+        Route::post('/{customer}/disable-supplier', [CustomersController::class, 'disableSupplier'])->name('disable-supplier');
+    });
+
+    // ── Parties ───────────────────────────────────────────────
+    Route::prefix('parties')->name('parties.')->group(function () {
+        Route::get('/{party}', [PartyController::class, 'show'])->name('show');
     });
 
     // ── Sales ────────────────────────────────────────────────
@@ -51,6 +61,13 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/{sale}', [SalesController::class, 'show'])->name('show');
         Route::get('/{sale}/receipt', [SalesController::class, 'receiptData'])->name('receipt');
         Route::post('/{sale}/void', [SalesController::class, 'void'])->name('void');
+        Route::post('/{sale}/returns', [ReturnController::class, 'store'])->name('returns.store');
+    });
+
+    // ── Returns ───────────────────────────────────────────────
+    Route::prefix('returns')->name('returns.')->group(function () {
+        Route::get('/',          [ReturnController::class, 'index'])->name('index');
+        Route::get('/{return}',  [ReturnController::class, 'show'])->name('show');
     });
 
     // ── Inventory ────────────────────────────────────────────
@@ -78,9 +95,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // ── Purchasing ─────────────────────────────────────────
     Route::prefix('purchasing')->name('purchasing.')->group(function () {
-        Route::get('suppliers',          [SupplierController::class, 'index'])->name('suppliers.index');
-        Route::post('suppliers',         [SupplierController::class, 'store'])->name('suppliers.store');
-        Route::patch('suppliers/{supplier}', [SupplierController::class, 'update'])->name('suppliers.update');
+        Route::get('suppliers',               [SupplierController::class, 'index'])->name('suppliers.index');
+        Route::post('suppliers',              [SupplierController::class, 'store'])->name('suppliers.store');
+        Route::get('suppliers/{supplier}',    [SupplierController::class, 'show'])->name('suppliers.show');
+        Route::patch('suppliers/{supplier}',  [SupplierController::class, 'update'])->name('suppliers.update');
         Route::delete('suppliers/{supplier}', [SupplierController::class, 'destroy'])->name('suppliers.destroy');
 
         Route::get('orders',             [PurchaseOrderController::class, 'index'])->name('orders.index');
@@ -90,6 +108,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('orders/{order}/receive', [PurchaseOrderController::class, 'receive'])->name('orders.receive');
         Route::post('orders/{order}/pay',     [PurchaseOrderController::class, 'pay'])->name('orders.pay');
         Route::post('orders/{order}/cancel',  [PurchaseOrderController::class, 'cancel'])->name('orders.cancel');
+    });
+
+    // ── Expenses ──────────────────────────────────────────
+    Route::prefix('expenses')->name('expenses.')->group(function () {
+        Route::get('/',             [ExpenseController::class, 'index'])->name('index');
+        Route::post('/',            [ExpenseController::class, 'store'])->name('store');
+        Route::patch('/{expense}',  [ExpenseController::class, 'update'])->name('update');
+        Route::delete('/{expense}', [ExpenseController::class, 'destroy'])->name('destroy');
     });
 
     // ── Business Settings ──────────────────────────────────

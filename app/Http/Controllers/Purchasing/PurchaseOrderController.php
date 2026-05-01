@@ -124,6 +124,7 @@ class PurchaseOrderController extends Controller
             'expected_date'  => 'nullable|date|after_or_equal:order_date',
             'payment_method' => 'required|in:cash,bank,credit',
             'notes'          => 'nullable|string|max:500',
+            'mark_received'  => 'boolean',
             'items'          => 'required|array|min:1',
             'items.*.product_id'      => 'required|exists:products,id',
             'items.*.variant_id'      => 'nullable|exists:product_variants,id',
@@ -133,12 +134,13 @@ class PurchaseOrderController extends Controller
             'items.*.variant_label'   => 'nullable|string',
         ]);
 
-        $tenant = auth()->user()->tenant;
-        $branch = $tenant->defaultBranch();
+        $tenant       = auth()->user()->tenant;
+        $branch       = $tenant->defaultBranch();
+        $markReceived = (bool) ($validated['mark_received'] ?? false);
 
         if (!$branch) return back()->with('error', 'No branch configured.');
 
-        $po = DB::transaction(function () use ($validated, $tenant, $branch) {
+        $po = DB::transaction(function () use ($validated, $tenant, $branch, $markReceived) {
             $subtotal = collect($validated['items'])->sum(fn ($i) => $i['unit_cost'] * $i['quantity_ordered']);
 
             $po = PurchaseOrder::create([
@@ -149,7 +151,8 @@ class PurchaseOrderController extends Controller
                 'po_number'      => PurchaseOrder::nextNumber($tenant->id),
                 'order_date'     => $validated['order_date'],
                 'expected_date'  => $validated['expected_date'] ?? null,
-                'status'         => 'ordered',
+                'status'         => $markReceived ? 'received' : 'ordered',
+                'received_date'  => $markReceived ? now()->toDateString() : null,
                 'subtotal'       => $subtotal,
                 'total'          => $subtotal,
                 'payment_method' => $validated['payment_method'],
@@ -157,24 +160,68 @@ class PurchaseOrderController extends Controller
             ]);
 
             foreach ($validated['items'] as $item) {
+                $qty = (int) $item['quantity_ordered'];
+
                 PurchaseOrderItem::create([
                     'purchase_order_id' => $po->id,
                     'product_id'        => $item['product_id'],
                     'variant_id'        => $item['variant_id'] ?? null,
                     'product_name'      => $item['product_name'],
                     'variant_label'     => $item['variant_label'] ?? null,
-                    'quantity_ordered'  => $item['quantity_ordered'],
-                    'quantity_received' => 0,
+                    'quantity_ordered'  => $qty,
+                    'quantity_received' => $markReceived ? $qty : 0,
                     'unit_cost'         => $item['unit_cost'],
-                    'line_total'        => $item['unit_cost'] * $item['quantity_ordered'],
+                    'line_total'        => $item['unit_cost'] * $qty,
                 ]);
+
+                // If marking as received, update stock immediately
+                if ($markReceived && $branch) {
+                    $stock = StockLevel::firstOrCreate(
+                        [
+                            'product_id' => $item['product_id'],
+                            'branch_id'  => $branch->id,
+                            'variant_id' => $item['variant_id'] ?? null,
+                        ],
+                        ['tenant_id' => $tenant->id, 'quantity' => 0]
+                    );
+                    $before = $stock->quantity;
+                    $stock->increment('quantity', $qty);
+
+                    StockAdjustment::create([
+                        'tenant_id'       => $tenant->id,
+                        'branch_id'       => $branch->id,
+                        'product_id'      => $item['product_id'],
+                        'variant_id'      => $item['variant_id'] ?? null,
+                        'user_id'         => auth()->id(),
+                        'quantity_before' => $before,
+                        'quantity_change' => $qty,
+                        'quantity_after'  => $before + $qty,
+                        'reason'          => 'purchase',
+                        'notes'           => "PO {$po->po_number} (created received)",
+                    ]);
+
+                    Product::where('id', $item['product_id'])
+                        ->update(['cost_price' => $item['unit_cost']]);
+                }
             }
 
             return $po;
         });
 
-        return redirect()->route('purchasing.orders.show', $po->id)
-            ->with('success', "Purchase Order {$po->po_number} created.");
+        // Post accounting entry if received on creation
+        if ($markReceived) {
+            try {
+                AccountingService::postPurchaseReceived($po->load('items'));
+            } catch (\Throwable $e) {
+                \Log::warning("AccountingService::postPurchaseReceived on create failed: " . $e->getMessage());
+            }
+        }
+
+        $msg = $markReceived
+            ? "Purchase Order {$po->po_number} created and stock received."
+            : "Purchase Order {$po->po_number} created.";
+
+        return redirect()->route('purchasing.orders.show', $po->id)->with('success', $msg);
     }
 
     public function show(PurchaseOrder $order): Response

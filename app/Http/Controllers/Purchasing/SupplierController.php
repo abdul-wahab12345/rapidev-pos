@@ -3,7 +3,10 @@
 namespace App\Http\Controllers\Purchasing;
 
 use App\Http\Controllers\Controller;
+use App\Models\Party;
 use App\Models\Supplier;
+use App\Services\SupplierService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -30,27 +33,18 @@ class SupplierController extends Controller
             $query->where('is_active', $request->status === 'active');
         }
 
-        $suppliers = $query->orderBy('name')->paginate(20)->withQueryString();
+        $suppliers = $query->with('party.customer')->orderBy('name')->paginate(20)->withQueryString();
 
+        $allForStats = Supplier::where('tenant_id', $tenant->id);
         $stats = [
-            'total'          => Supplier::where('tenant_id', $tenant->id)->count(),
-            'active'         => Supplier::where('tenant_id', $tenant->id)->where('is_active', true)->count(),
-            'total_payable'  => (float) Supplier::where('tenant_id', $tenant->id)->sum('current_balance'),
+            'total'          => (clone $allForStats)->count(),
+            'active'         => (clone $allForStats)->where('is_active', true)->count(),
+            'total_payable'  => (float) (clone $allForStats)->sum('current_balance'),
         ];
 
         return Inertia::render('Purchasing/Suppliers/Index', [
             'suppliers' => [
-                'data'         => collect($suppliers->items())->map(fn ($s) => [
-                    'id'              => $s->id,
-                    'name'            => $s->name,
-                    'company'         => $s->company,
-                    'phone'           => $s->phone,
-                    'email'           => $s->email,
-                    'city'            => $s->city,
-                    'payment_terms'   => $s->payment_terms,
-                    'current_balance' => (float) $s->current_balance,
-                    'is_active'       => $s->is_active,
-                ]),
+                'data'         => collect($suppliers->items())->map(fn ($s) => SupplierService::indexRow($s)),
                 'current_page' => $suppliers->currentPage(),
                 'last_page'    => $suppliers->lastPage(),
                 'total'        => $suppliers->total(),
@@ -58,6 +52,11 @@ class SupplierController extends Controller
             'stats'   => $stats,
             'filters' => $request->only(['search', 'status']),
         ]);
+    }
+
+    public function show(Supplier $supplier): Response
+    {
+        return Inertia::render('Purchasing/Suppliers/Show', SupplierService::showData($supplier));
     }
 
     public function store(Request $request): RedirectResponse
@@ -75,11 +74,45 @@ class SupplierController extends Controller
             'notes'           => 'nullable|string|max:500',
         ]);
 
-        $tenant   = auth()->user()->tenant;
-        $supplier = Supplier::create(array_merge($validated, [
-            'tenant_id'       => $tenant->id,
-            'current_balance' => $validated['opening_balance'] ?? 0,
-        ]));
+        $tenant = auth()->user()->tenant;
+
+        $supplier = DB::transaction(function () use ($validated, $tenant) {
+            // Reuse an existing party if name+phone match (contractor scenario)
+            $party = null;
+            if (! empty($validated['phone'])) {
+                $party = Party::where('tenant_id', $tenant->id)
+                    ->where('phone', $validated['phone'])
+                    ->first();
+            }
+            if (! $party && ! empty($validated['name'])) {
+                $party = Party::where('tenant_id', $tenant->id)
+                    ->where('name', $validated['name'])
+                    ->first();
+            }
+
+            if ($party) {
+                $party->update(['is_supplier' => true]);
+            } else {
+                $party = Party::create([
+                    'tenant_id'   => $tenant->id,
+                    'name'        => $validated['name'],
+                    'company'     => $validated['company'] ?? null,
+                    'phone'       => $validated['phone'] ?? null,
+                    'email'       => $validated['email'] ?? null,
+                    'address'     => $validated['address'] ?? null,
+                    'city'        => $validated['city'] ?? null,
+                    'ntn'         => $validated['ntn'] ?? null,
+                    'is_customer' => false,
+                    'is_supplier' => true,
+                ]);
+            }
+
+            return Supplier::create(array_merge($validated, [
+                'tenant_id'       => $tenant->id,
+                'party_id'        => $party->id,
+                'current_balance' => $validated['opening_balance'] ?? 0,
+            ]));
+        });
 
         return back()->with('success', "Supplier {$supplier->name} added.");
     }
