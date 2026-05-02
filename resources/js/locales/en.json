@@ -237,7 +237,7 @@
   "settings.languageLabel": "Language",
   "settings.businessNamePlaceholder": "e.g. Al-Kareem General Store",
   "settings.businessPhonePlaceholder": "0300-1234567",
-  "settings.businessEmailPlaceholder": "info@example.com",
+  "settings.businessEmailPlaceholder": "info{'@'}example.com",
   "settings.businessAddressPlaceholder": "Street, area",
   "settings.businessCityPlaceholder": "Lahore",
   "settings.currencySymbolHint": "Shown before amounts, e.g. {symbol} 1,250",

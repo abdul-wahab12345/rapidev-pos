@@ -237,7 +237,7 @@
   "settings.languageLabel": "زبان",
   "settings.businessNamePlaceholder": "مثلاً الخریم جنرل اسٹور",
   "settings.businessPhonePlaceholder": "0300-1234567",
-  "settings.businessEmailPlaceholder": "info@example.com",
+  "settings.businessEmailPlaceholder": "info{'@'}example.com",
   "settings.businessAddressPlaceholder": "گلی، علاقہ",
   "settings.businessCityPlaceholder": "لاہور",
   "settings.currencySymbolHint": "رقم سے پہلے علامت، مثلاً {symbol} 1،250",
