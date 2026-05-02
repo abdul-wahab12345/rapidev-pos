@@ -37,7 +37,7 @@ class PosController extends Controller
 
         // Load customers for udhaar selector
         $customers = Customer::orderBy('name')
-            ->get(['id', 'name', 'phone', 'current_balance', 'credit_limit']);
+            ->get(['id', 'name', 'phone', 'current_balance', 'credit_limit', 'discount_percent']);
 
         // Today's stats — exclude voided sales
         $todaySales   = Sale::where('status', '!=', 'voided')->whereDate('created_at', today())->count();
@@ -50,11 +50,12 @@ class PosController extends Controller
             'categories' => $categories,
             'initialProducts' => $products,
             'customers' => $customers->map(fn ($c) => [
-                'id'           => $c->id,
-                'name'         => $c->name,
-                'phone'        => $c->phone,
-                'balance'      => (float) $c->current_balance,
-                'credit_limit' => (float) $c->credit_limit,
+                'id'               => $c->id,
+                'name'             => $c->name,
+                'phone'            => $c->phone,
+                'balance'          => (float) $c->current_balance,
+                'credit_limit'     => (float) $c->credit_limit,
+                'discount_percent' => (float) $c->discount_percent,
             ]),
             'cashier' => [
                 'id'   => auth()->id(),
@@ -301,13 +302,14 @@ class PosController extends Controller
     {
         $customers = Customer::search($request->get('q', ''))
             ->limit(8)
-            ->get(['id', 'name', 'phone', 'current_balance', 'credit_limit'])
+            ->get(['id', 'name', 'phone', 'current_balance', 'credit_limit', 'discount_percent'])
             ->map(fn ($c) => [
-                'id'           => $c->id,
-                'name'         => $c->name,
-                'phone'        => $c->phone,
-                'balance'      => (float) $c->current_balance,
-                'credit_limit' => (float) $c->credit_limit,
+                'id'               => $c->id,
+                'name'             => $c->name,
+                'phone'            => $c->phone,
+                'balance'          => (float) $c->current_balance,
+                'credit_limit'     => (float) $c->credit_limit,
+                'discount_percent' => (float) $c->discount_percent,
             ]);
 
         return response()->json($customers);

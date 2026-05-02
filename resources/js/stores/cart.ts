@@ -33,6 +33,7 @@ export interface Customer {
     phone: string;
     balance: number;
     credit_limit: number;
+    discount_percent: number;
 }
 
 export type PaymentMethod = 'cash' | 'jazzcash' | 'easypaisa' | 'udhaar' | 'mixed';

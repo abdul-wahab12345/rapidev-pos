@@ -6,9 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
+use App\Models\PurchaseOrderPayment;
 use App\Models\StockAdjustment;
 use App\Models\StockLevel;
 use App\Models\Supplier;
+use App\Models\SupplierReturn;
+use App\Models\SupplierReturnItem;
 use App\Services\AccountingService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -228,6 +231,15 @@ class PurchaseOrderController extends Controller
     {
         $order->load(['supplier', 'items.product', 'items.variant', 'creator']);
 
+        $payments = PurchaseOrderPayment::where('purchase_order_id', $order->id)
+            ->orderByDesc('created_at')
+            ->get();
+
+        $returns = SupplierReturn::where('purchase_order_id', $order->id)
+            ->with('items')
+            ->orderByDesc('created_at')
+            ->get();
+
         return Inertia::render('Purchasing/Orders/Show', [
             'order' => [
                 'id'             => $order->id,
@@ -260,6 +272,29 @@ class PurchaseOrderController extends Controller
                     'quantity_received' => $i->quantity_received,
                     'unit_cost'         => (float) $i->unit_cost,
                     'line_total'        => (float) $i->line_total,
+                ]),
+                'payments' => $payments->map(fn ($p) => [
+                    'id'             => $p->id,
+                    'amount'         => (float) $p->amount,
+                    'payment_method' => $p->payment_method,
+                    'notes'          => $p->notes,
+                    'is_voided'      => $p->is_voided,
+                    'created_at'     => $p->created_at,
+                ]),
+                'returns' => $returns->map(fn ($r) => [
+                    'id'            => $r->id,
+                    'return_number' => $r->return_number,
+                    'total_amount'  => (float) $r->total_amount,
+                    'reason'        => $r->reason,
+                    'notes'         => $r->notes,
+                    'created_at'    => $r->created_at,
+                    'items'         => $r->items->map(fn ($i) => [
+                        'product_name'     => $i->product_name,
+                        'variant_label'    => $i->variant_label,
+                        'quantity_returned'=> $i->quantity_returned,
+                        'unit_cost'        => (float) $i->unit_cost,
+                        'line_total'       => (float) $i->line_total,
+                    ]),
                 ]),
             ],
         ]);
@@ -354,18 +389,149 @@ class PurchaseOrderController extends Controller
             return back()->with('error', 'No outstanding amount to pay.');
         }
 
-        DB::transaction(function () use ($order, $amount) {
+        $payment = DB::transaction(function () use ($order, $amount, $validated) {
             $order->increment('paid_amount', $amount);
             $order->supplier()->update(['current_balance' => \DB::raw("GREATEST(0, current_balance - {$amount})")]);
+
+            return PurchaseOrderPayment::create([
+                'tenant_id'      => $order->tenant_id,
+                'purchase_order_id' => $order->id,
+                'amount'         => $amount,
+                'payment_method' => $validated['payment_method'],
+                'notes'          => $validated['notes'] ?? null,
+                'is_voided'      => false,
+                'created_by'     => auth()->id(),
+            ]);
         });
 
         try {
-            AccountingService::postPurchasePayment($order, $amount, $validated['payment_method']);
+            AccountingService::postPurchasePaymentRecord($payment, $order);
         } catch (\Throwable $e) {
-            \Log::warning("AccountingService::postPurchasePayment failed: " . $e->getMessage());
+            \Log::warning("AccountingService::postPurchasePaymentRecord failed: " . $e->getMessage());
         }
 
         return back()->with('success', 'Payment of Rs ' . number_format($amount, 2) . ' recorded.');
+    }
+
+    // Void a previously recorded PO payment
+    public function voidPayment(PurchaseOrder $order, PurchaseOrderPayment $payment): RedirectResponse
+    {
+        if ($payment->purchase_order_id !== $order->id) {
+            return back()->with('error', 'Payment does not belong to this order.');
+        }
+        if ($payment->is_voided) {
+            return back()->with('error', 'Payment is already voided.');
+        }
+
+        $amount = (float) $payment->amount;
+
+        DB::transaction(function () use ($order, $payment, $amount) {
+            $payment->update(['is_voided' => true]);
+            $order->decrement('paid_amount', $amount);
+            $order->supplier()->update(['current_balance' => \DB::raw("current_balance + {$amount}")]);
+        });
+
+        try {
+            AccountingService::reversePurchasePayment($payment->load('purchaseOrder'));
+        } catch (\Throwable $e) {
+            \Log::warning("AccountingService::reversePurchasePayment failed: " . $e->getMessage());
+        }
+
+        return back()->with('success', 'Payment voided and AP balance restored.');
+    }
+
+    // Record a supplier return (debit note) against a received PO
+    public function storeReturn(Request $request, PurchaseOrder $order): RedirectResponse
+    {
+        if (!in_array($order->status, ['received', 'partial'])) {
+            return back()->with('error', 'Can only return items from received orders.');
+        }
+
+        $validated = $request->validate([
+            'reason' => 'nullable|string|max:300',
+            'notes'  => 'nullable|string|max:500',
+            'items'  => 'required|array|min:1',
+            'items.*.purchase_order_item_id' => 'required|exists:purchase_order_items,id',
+            'items.*.quantity_returned'      => 'required|integer|min:1',
+        ]);
+
+        $tenant = auth()->user()->tenant;
+        $branch = $tenant->defaultBranch();
+
+        $supplierReturn = DB::transaction(function () use ($order, $validated, $branch, $tenant) {
+            $total = 0;
+
+            $return = SupplierReturn::create([
+                'tenant_id'         => $order->tenant_id,
+                'purchase_order_id' => $order->id,
+                'supplier_id'       => $order->supplier_id,
+                'return_number'     => SupplierReturn::nextNumber($order->tenant_id),
+                'total_amount'      => 0, // updated below
+                'reason'            => $validated['reason'] ?? null,
+                'notes'             => $validated['notes'] ?? null,
+                'created_by'        => auth()->id(),
+            ]);
+
+            foreach ($validated['items'] as $line) {
+                $item = PurchaseOrderItem::find($line['purchase_order_item_id']);
+                if (!$item || $item->purchase_order_id !== $order->id) continue;
+
+                $qty       = (int) $line['quantity_returned'];
+                $lineTotal = (float) $item->unit_cost * $qty;
+                $total    += $lineTotal;
+
+                SupplierReturnItem::create([
+                    'supplier_return_id'     => $return->id,
+                    'purchase_order_item_id' => $item->id,
+                    'product_name'           => $item->product_name,
+                    'variant_label'          => $item->variant_label,
+                    'quantity_returned'      => $qty,
+                    'unit_cost'              => $item->unit_cost,
+                    'line_total'             => $lineTotal,
+                ]);
+
+                // Reduce stock
+                if ($branch) {
+                    $stock = StockLevel::where('product_id', $item->product_id)
+                        ->where('branch_id', $branch->id)
+                        ->where('variant_id', $item->variant_id)
+                        ->first();
+
+                    if ($stock && $stock->quantity >= $qty) {
+                        $before = $stock->quantity;
+                        $stock->decrement('quantity', $qty);
+
+                        StockAdjustment::create([
+                            'tenant_id'       => $order->tenant_id,
+                            'branch_id'       => $branch->id,
+                            'product_id'      => $item->product_id,
+                            'variant_id'      => $item->variant_id,
+                            'user_id'         => auth()->id(),
+                            'quantity_before' => $before,
+                            'quantity_change' => -$qty,
+                            'quantity_after'  => $before - $qty,
+                            'reason'          => 'return',
+                            'notes'           => "Supplier return {$return->return_number}",
+                        ]);
+                    }
+                }
+            }
+
+            $return->update(['total_amount' => $total]);
+
+            // Reduce supplier AP balance
+            $order->supplier()->update(['current_balance' => \DB::raw("GREATEST(0, current_balance - {$total})")]);
+
+            return $return;
+        });
+
+        try {
+            AccountingService::postSupplierReturn($supplierReturn->load('purchaseOrder'));
+        } catch (\Throwable $e) {
+            \Log::warning("AccountingService::postSupplierReturn failed: " . $e->getMessage());
+        }
+
+        return back()->with('success', "Supplier return {$supplierReturn->return_number} recorded.");
     }
 
     public function cancel(PurchaseOrder $order): RedirectResponse

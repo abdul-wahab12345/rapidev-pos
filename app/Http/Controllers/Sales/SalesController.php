@@ -61,16 +61,30 @@ class SalesController extends Controller
             ->when($request->filled('status'),    fn ($q) => $q->where('status', $request->status))
             ->when(! $filteringForVoided,         fn ($q) => $q->where('status', '!=', 'voided'));
 
+        $tenantId = auth()->user()->tenant_id;
+
+        // Returns within the same date window (by return_date) so revenue is net of refunds
+        $returnsBase = SaleReturn::where('tenant_id', $tenantId);
+        $periodRefunds = (float) (clone $returnsBase)
+            ->when($request->filled('date_from'), fn ($q) => $q->where('return_date', '>=', $request->date_from))
+            ->when($request->filled('date_to'),   fn ($q) => $q->where('return_date', '<=', $request->date_to))
+            ->sum('total_refund');
+
+        $todayRefunds = (float) SaleReturn::where('tenant_id', $tenantId)
+            ->whereDate('return_date', today())
+            ->sum('total_refund');
+
         $stats = [
             'total_sales'    => $statsQuery->count(),
-            'total_revenue'  => (float) $statsQuery->sum('total'),
+            'total_revenue'  => (float) $statsQuery->sum('total') - $periodRefunds,
             'total_discount' => (float) $statsQuery->sum('discount'),
-            'total_udhaar'   => (float) Sale::where('status', '!=', 'voided')
+            'total_udhaar'   => (float) Sale::where('tenant_id', $tenantId)
+                                    ->where('status', '!=', 'voided')
                                     ->when($request->filled('date_from'), fn ($q) => $q->whereDate('created_at', '>=', $request->date_from))
                                     ->when($request->filled('date_to'),   fn ($q) => $q->whereDate('created_at', '<=', $request->date_to))
                                     ->sum('udhaar_amount'),
-            'today_count'    => Sale::where('status', '!=', 'voided')->whereDate('created_at', today())->count(),
-            'today_revenue'  => (float) Sale::where('status', '!=', 'voided')->whereDate('created_at', today())->sum('total'),
+            'today_count'    => Sale::where('tenant_id', $tenantId)->where('status', '!=', 'voided')->whereDate('created_at', today())->count(),
+            'today_revenue'  => (float) Sale::where('tenant_id', $tenantId)->where('status', '!=', 'voided')->whereDate('created_at', today())->sum('total') - $todayRefunds,
         ];
 
         return Inertia::render('Sales/Index', [
@@ -191,7 +205,7 @@ class SalesController extends Controller
             'cashier'          => ['name' => $sale->cashier?->name],
             'branch'           => ['name' => $sale->branch?->name],
             'items'            => $sale->items->map(fn ($i) => [
-                'product_name'  => $i->product_name,
+                'name'          => $i->product_name,
                 'variant_label' => $i->variant_label,
                 'quantity'      => $i->quantity,
                 'unit_price'    => (float) $i->unit_price,

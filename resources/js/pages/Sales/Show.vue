@@ -142,35 +142,14 @@ async function voidSale() {
 // ── Reprint receipt ───────────────────────────────────────────
 const { printReceipt: openReceiptPrint } = useReceipt();
 
-function printReceipt() {
-    const sale = props.sale;
-    openReceiptPrint({
-        invoice_number:   sale.invoice_number,
-        created_at:       sale.created_at,
-        business_name:    sale.branch?.name || 'Bithouse POS',
-        branch_name:      null,
-        cashier_name:     sale.cashier?.name ?? null,
-        customer_name:    sale.customer?.name ?? null,
-        customer_phone:   sale.customer?.phone ?? null,
-        items: sale.items.map(item => ({
-            name:          item.product_name,
-            variant_label: item.variant_label,
-            quantity:      item.quantity,
-            unit_price:    item.unit_price,
-            line_total:    item.line_total,
-            discount:      item.discount,
-        })),
-        subtotal:          sale.subtotal,
-        discount:          sale.discount,
-        tax:               sale.tax,
-        total:             sale.total,
-        payment_method:    sale.payment_method,
-        cash_amount:       sale.cash_amount,
-        jazzcash_amount:   sale.jazzcash_amount,
-        easypaisa_amount:  sale.easypaisa_amount,
-        udhaar_amount:     sale.udhaar_amount,
-        change_amount:     sale.change_amount,
-    });
+async function printReceipt() {
+    try {
+        const response = await fetch(route('sales.receipt', props.sale.id));
+        const data = await response.json();
+        openReceiptPrint(data);
+    } catch (error) {
+        console.error('Failed to print receipt:', error);
+    }
 }
 </script>
 

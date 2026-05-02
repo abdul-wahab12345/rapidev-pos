@@ -82,8 +82,8 @@ const props = defineProps<{
 
 // ── Filters ────────────────────────────────────────────
 const search   = ref(props.filters.search   ?? '');
-const category = ref(props.filters.category ?? '');
-const stockF   = ref(props.filters.stock    ?? '');
+const category = ref(props.filters.category ?? '_all_');
+const stockF   = ref(props.filters.stock    ?? '_all_');
 const tab      = ref<'stock' | 'history'>('stock');
 
 let debounce: ReturnType<typeof setTimeout>;
@@ -94,18 +94,20 @@ watch([search, category, stockF], () => {
 
 function applyFilters() {
     router.get(route('inventory.stock.index'), {
-        search:   search.value   || undefined,
-        category: category.value || undefined,
-        stock:    stockF.value   || undefined,
+        search:   search.value                             || undefined,
+        category: category.value !== '_all_' ? category.value : undefined,
+        stock:    stockF.value   !== '_all_' ? stockF.value   : undefined,
     }, { preserveState: true, replace: true });
 }
 
 function clearFilters() {
-    search.value = category.value = stockF.value = '';
+    search.value = '';
+    category.value = '_all_';
+    stockF.value   = '_all_';
     applyFilters();
 }
 
-const hasFilters = computed(() => search.value || category.value || stockF.value);
+const hasFilters = computed(() => search.value || category.value !== '_all_' || stockF.value !== '_all_');
 
 // ── Adjust Modal ────────────────────────────────────────
 const showAdjust = ref(false);
@@ -223,7 +225,7 @@ const reasonLabel: Record<string, string> = {
                         <SelectValue placeholder="All Categories" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="">All Categories</SelectItem>
+                        <SelectItem value="_all_">All Categories</SelectItem>
                         <SelectItem v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</SelectItem>
                     </SelectContent>
                 </Select>
@@ -233,7 +235,7 @@ const reasonLabel: Record<string, string> = {
                         <SelectValue placeholder="All Stock" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="">All Stock</SelectItem>
+                        <SelectItem value="_all_">All Stock</SelectItem>
                         <SelectItem value="low">Low Stock</SelectItem>
                         <SelectItem value="out">Out of Stock</SelectItem>
                     </SelectContent>

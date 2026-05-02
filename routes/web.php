@@ -45,7 +45,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/{customer}/edit',    [CustomersController::class, 'edit'])->name('edit');
         Route::put('/{customer}',         [CustomersController::class, 'update'])->name('update');
         Route::delete('/{customer}',      [CustomersController::class, 'destroy'])->name('destroy');
-        Route::post('/{customer}/payment',         [CustomersController::class, 'recordPayment'])->name('payment');
+        Route::post('/{customer}/payment',                      [CustomersController::class, 'recordPayment'])->name('payment');
+        Route::post('/{customer}/payment/{entry}/void',         [CustomersController::class, 'voidPayment'])->name('payment.void');
         Route::post('/{customer}/enable-supplier',  [CustomersController::class, 'enableSupplier'])->name('enable-supplier');
         Route::post('/{customer}/disable-supplier', [CustomersController::class, 'disableSupplier'])->name('disable-supplier');
     });
@@ -105,9 +106,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('orders/create',      [PurchaseOrderController::class, 'create'])->name('orders.create');
         Route::post('orders',            [PurchaseOrderController::class, 'store'])->name('orders.store');
         Route::get('orders/{order}',     [PurchaseOrderController::class, 'show'])->name('orders.show');
-        Route::post('orders/{order}/receive', [PurchaseOrderController::class, 'receive'])->name('orders.receive');
-        Route::post('orders/{order}/pay',     [PurchaseOrderController::class, 'pay'])->name('orders.pay');
-        Route::post('orders/{order}/cancel',  [PurchaseOrderController::class, 'cancel'])->name('orders.cancel');
+        Route::post('orders/{order}/receive',                   [PurchaseOrderController::class, 'receive'])->name('orders.receive');
+        Route::post('orders/{order}/pay',                       [PurchaseOrderController::class, 'pay'])->name('orders.pay');
+        Route::post('orders/{order}/payments/{payment}/void',   [PurchaseOrderController::class, 'voidPayment'])->name('orders.payments.void');
+        Route::post('orders/{order}/returns',                   [PurchaseOrderController::class, 'storeReturn'])->name('orders.returns.store');
+        Route::post('orders/{order}/cancel',                    [PurchaseOrderController::class, 'cancel'])->name('orders.cancel');
     });
 
     // ── Expenses ──────────────────────────────────────────

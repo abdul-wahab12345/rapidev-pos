@@ -301,7 +301,7 @@ class AccountsController extends Controller
                 // Oldest unpaid sale date (first sale that contributed to udhaar)
                 $oldestSale = \App\Models\Sale::where('customer_id', $c->id)
                     ->where('udhaar_amount', '>', 0)
-                    ->where('status', 'completed')
+                    ->whereIn('status', ['completed', 'partially_returned'])
                     ->orderBy('created_at')
                     ->value('created_at');
 

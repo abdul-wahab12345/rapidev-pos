@@ -78,6 +78,28 @@ function selectCustomer(c: Customer) {
     cart.selectedCustomer = c;
     cart.showCustomerPanel = false;
     customerSearch.value = '';
+    // Auto-apply customer's preset discount
+    if (c.discount_percent > 0) {
+        discountType.value  = 'percent';
+        discountInput.value = c.discount_percent;
+        showDiscountRow.value = true;
+    }
+}
+
+function clearCustomer() {
+    // Remove auto-applied customer discount when deselecting
+    if (
+        cart.selectedCustomer &&
+        cart.selectedCustomer.discount_percent > 0 &&
+        discountType.value === 'percent' &&
+        discountInput.value === cart.selectedCustomer.discount_percent
+    ) {
+        discountInput.value = 0;
+        cart.cartDiscount   = 0;
+        showDiscountRow.value = false;
+    }
+    cart.selectedCustomer = null;
+    cart.showCustomerPanel = false;
 }
 
 // ── Add new customer ────────────────────────────────────────────
@@ -94,6 +116,7 @@ function openAddCustomer() {
 
 async function saveNewCustomer() {
     if (!newCustomer.value.name.trim()) { addCustomerError.value = 'Name is required'; return; }
+    if (!newCustomer.value.phone.trim()) { addCustomerError.value = 'Phone is required'; return; }
     addingCustomer.value = true;
     addCustomerError.value = '';
     try {
@@ -455,7 +478,7 @@ const paymentMethods = [
                     </button>
 
                     <button
-                        @click="cart.selectedCustomer = null; cart.showCustomerPanel = false"
+                        @click="clearCustomer"
                         class="w-full py-2 text-center text-xs text-muted-foreground hover:text-foreground transition-colors"
                     >Walk-in / no customer</button>
                 </div>
@@ -733,7 +756,7 @@ const paymentMethods = [
                             />
                         </div>
                         <div>
-                            <label class="mb-1 block text-xs font-medium text-muted-foreground">Phone</label>
+                            <label class="mb-1 block text-xs font-medium text-muted-foreground">Phone <span class="text-destructive">*</span></label>
                             <input
                                 v-model="newCustomer.phone"
                                 type="text"

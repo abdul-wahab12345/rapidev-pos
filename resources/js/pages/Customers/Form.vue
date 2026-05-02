@@ -12,6 +12,7 @@ interface CustomerData {
     address: string | null;
     notes: string | null;
     credit_limit: number;
+    discount_percent: number;
 }
 
 const props = defineProps<{ customer: CustomerData | null }>();
@@ -24,12 +25,13 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 const form = useForm({
-    name:         props.customer?.name         ?? '',
-    phone:        props.customer?.phone        ?? '',
-    cnic:         props.customer?.cnic         ?? '',
-    address:      props.customer?.address      ?? '',
-    notes:        props.customer?.notes        ?? '',
-    credit_limit: props.customer?.credit_limit ?? '',
+    name:             props.customer?.name             ?? '',
+    phone:            props.customer?.phone            ?? '',
+    cnic:             props.customer?.cnic             ?? '',
+    address:          props.customer?.address          ?? '',
+    notes:            props.customer?.notes            ?? '',
+    credit_limit:     props.customer?.credit_limit     ?? '',
+    discount_percent: props.customer?.discount_percent ?? '',
 });
 
 function submit() {
@@ -80,12 +82,15 @@ function submit() {
 
                 <!-- Phone -->
                 <div>
-                    <label class="mb-1.5 block text-sm font-medium text-foreground">Phone</label>
+                    <label class="mb-1.5 block text-sm font-medium text-foreground">
+                        Phone <span class="text-destructive">*</span>
+                    </label>
                     <input
                         v-model="form.phone"
                         type="text"
                         placeholder="03xx-xxxxxxx"
                         class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
+                        :class="form.errors.phone ? 'border-destructive' : ''"
                     />
                     <p v-if="form.errors.phone" class="mt-1 text-xs text-destructive">{{ form.errors.phone }}</p>
                 </div>
@@ -112,19 +117,41 @@ function submit() {
                     />
                 </div>
 
-                <!-- Credit limit -->
-                <div>
-                    <label class="mb-1.5 block text-sm font-medium text-foreground">
-                        Credit Limit (Rs)
-                        <span class="ml-1 text-xs font-normal text-muted-foreground">— max udhaar allowed</span>
-                    </label>
-                    <input
-                        v-model="form.credit_limit"
-                        type="number"
-                        min="0"
-                        placeholder="0 = no limit"
-                        class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
-                    />
+                <!-- Credit limit + Discount % (side by side) -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-foreground">
+                            Credit Limit (Rs)
+                            <span class="ml-1 text-xs font-normal text-muted-foreground">0 = no limit</span>
+                        </label>
+                        <input
+                            v-model="form.credit_limit"
+                            type="number"
+                            min="0"
+                            placeholder="0"
+                            class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
+                        />
+                    </div>
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-foreground">
+                            Auto Discount
+                            <span class="ml-1 text-xs font-normal text-muted-foreground">% on every sale</span>
+                        </label>
+                        <div class="relative">
+                            <input
+                                v-model="form.discount_percent"
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.5"
+                                placeholder="0"
+                                class="w-full rounded-lg border border-input bg-background px-3 py-2 pr-7 text-sm placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
+                                :class="form.errors.discount_percent ? 'border-destructive' : ''"
+                            />
+                            <span class="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
+                        </div>
+                        <p v-if="form.errors.discount_percent" class="mt-1 text-xs text-destructive">{{ form.errors.discount_percent }}</p>
+                    </div>
                 </div>
 
                 <!-- Notes -->

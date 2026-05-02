@@ -41,7 +41,7 @@ export interface ReceiptData {
 
 function buildReceiptHtml(data: ReceiptData): string {
     const sym = data.currency_symbol ?? 'Rs';
-    const fm  = (n: number) => `${sym} ${formatMoney(n)}`;
+    const fm = (n: number) => formatMoney(n);
 
     const dateTime = data.created_at
         ? formatDateTime(data.created_at)
@@ -58,7 +58,7 @@ function buildReceiptHtml(data: ReceiptData): string {
             : item.name;                    // English only
         const varLabel = item.variant_label ? ` <span style="font-size:10px">(${item.variant_label})</span>` : '';
         const nameCell = isUrdu
-            ? `<div class="ur" dir="rtl">${displayName}${varLabel}</div>`
+            ? `${displayName}${varLabel}`
             : `${displayName}${varLabel}`;
         return `
             <tr>
@@ -71,8 +71,8 @@ function buildReceiptHtml(data: ReceiptData): string {
         `;
     }).join('');
 
-    const cashierLine  = [dateTime, data.cashier_name].filter(Boolean).join(' &nbsp;|&nbsp; ');
-    const footer       = data.receipt_footer || 'Thank you for your business!';
+    const cashierLine = [dateTime, data.cashier_name].filter(Boolean).join(' &nbsp;|&nbsp; ');
+    const footer = data.receipt_footer || 'Thank you for your business!';
     const addressParts = [data.business_address, data.business_city].filter(Boolean).join(', ');
 
     return `<!DOCTYPE html>

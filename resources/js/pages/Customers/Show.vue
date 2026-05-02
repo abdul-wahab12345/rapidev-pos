@@ -7,7 +7,7 @@ import type { BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import {
     ArrowLeft, BookOpen, Building2, CreditCard, Edit, Phone,
-    ShoppingBag, Trash2, Wallet,
+    ShoppingBag, Trash2, Undo2, Wallet,
 } from 'lucide-vue-next';
 import { ref } from 'vue';
 
@@ -41,6 +41,7 @@ interface Customer {
     notes: string | null;
     current_balance: number;
     credit_limit: number;
+    discount_percent: number;
     total_spend: number;
     created_at: string;
     party_id: string | null;
@@ -121,6 +122,18 @@ async function deleteCustomer() {
     router.delete(route('customers.destroy', props.customer.id));
 }
 
+// ── Void customer payment ─────────────────────────────────────
+async function voidPayment(entry: LedgerEntry) {
+    const ok = await confirm({
+        title: `Void Payment of ${formatMoney(Math.abs(entry.amount))}?`,
+        message: 'This will restore the udhaar balance for the customer.',
+        confirmLabel: 'Void Payment',
+        variant: 'danger',
+    });
+    if (!ok) return;
+    router.post(route('customers.payment.void', { customer: props.customer.id, entry: entry.id }), {}, { preserveScroll: true });
+}
+
 // ── Helpers ───────────────────────────────────────────────────
 const fmt = formatMoney;
 const fmtDate = (dt: string) => formatDateTime(dt);
@@ -195,6 +208,13 @@ const typeLabel = ledgerTypeBadge;
                         {{ customer.credit_limit > 0 ? fmt(customer.credit_limit) : '—' }}
                     </p>
                 </div>
+                <div class="rounded-xl border border-border bg-card p-4">
+                    <p class="text-xs font-medium text-muted-foreground">Auto Discount</p>
+                    <p class="mt-1.5 text-2xl font-black"
+                        :class="customer.discount_percent > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'">
+                        {{ customer.discount_percent > 0 ? `${customer.discount_percent}%` : '—' }}
+                    </p>
+                </div>
             </div>
 
             <div class="grid gap-6 lg:grid-cols-3">
@@ -216,11 +236,12 @@ const typeLabel = ledgerTypeBadge;
                                     <th class="px-4 py-2.5">Description</th>
                                     <th class="px-4 py-2.5 text-right">Amount</th>
                                     <th class="px-4 py-2.5 text-right">Balance</th>
+                                    <th class="px-4 py-2.5"></th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-border">
                                 <tr v-if="ledger.data.length === 0">
-                                    <td colspan="5" class="px-4 py-10 text-center text-sm text-muted-foreground">No ledger entries yet</td>
+                                    <td colspan="6" class="px-4 py-10 text-center text-sm text-muted-foreground">No ledger entries yet</td>
                                 </tr>
                                 <tr v-for="entry in ledger.data" :key="entry.id" class="hover:bg-muted/20">
                                     <td class="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{{ fmtDate(entry.created_at) }}</td>
@@ -238,6 +259,16 @@ const typeLabel = ledgerTypeBadge;
                                     </td>
                                     <td class="px-4 py-2.5 text-right text-sm font-bold text-foreground">
                                         {{ fmt(entry.running_balance) }}
+                                    </td>
+                                    <td class="px-4 py-2.5 text-right">
+                                        <button
+                                            v-if="entry.type === 'payment'"
+                                            @click="voidPayment(entry)"
+                                            class="flex items-center gap-1 text-xs text-destructive hover:underline ml-auto"
+                                            title="Void this payment"
+                                        >
+                                            <Undo2 class="h-3 w-3" /> Void
+                                        </button>
                                     </td>
                                 </tr>
                             </tbody>

@@ -87,11 +87,12 @@ class CustomersController extends Controller
                 'cnic'            => $customer->cnic,
                 'address'         => $customer->address,
                 'notes'           => $customer->notes,
-                'current_balance' => (float) $customer->current_balance,
-                'credit_limit'    => (float) $customer->credit_limit,
-                'total_spend'     => (float) $customer->total_spend,
-                'created_at'      => $customer->created_at,
-                'party_id'        => $customer->party_id,
+                'current_balance'  => (float) $customer->current_balance,
+                'credit_limit'     => (float) $customer->credit_limit,
+                'discount_percent' => (float) $customer->discount_percent,
+                'total_spend'      => (float) $customer->total_spend,
+                'created_at'       => $customer->created_at,
+                'party_id'         => $customer->party_id,
             ],
             'linked_supplier' => $supplier ? [
                 'id'              => $supplier->id,
@@ -134,12 +135,13 @@ class CustomersController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'name'         => 'required|string|max:255',
-            'phone'        => 'nullable|string|max:20',
-            'cnic'         => 'nullable|string|max:20',
-            'address'      => 'nullable|string|max:500',
-            'notes'        => 'nullable|string|max:1000',
-            'credit_limit' => 'nullable|numeric|min:0',
+            'name'             => 'required|string|max:255',
+            'phone'            => 'required|string|max:20',
+            'cnic'             => 'nullable|string|max:20',
+            'address'          => 'nullable|string|max:500',
+            'notes'            => 'nullable|string|max:1000',
+            'credit_limit'     => 'nullable|numeric|min:0',
+            'discount_percent' => 'nullable|numeric|min:0|max:100',
         ]);
 
         DB::transaction(function () use ($validated) {
@@ -155,15 +157,16 @@ class CustomersController extends Controller
             ]);
 
             Customer::create([
-                'party_id'        => $party->id,
-                'name'            => $validated['name'],
-                'phone'           => $validated['phone'] ?? null,
-                'cnic'            => $validated['cnic'] ?? null,
-                'address'         => $validated['address'] ?? null,
-                'notes'           => $validated['notes'] ?? null,
-                'credit_limit'    => isset($validated['credit_limit']) ? (float) $validated['credit_limit'] : 0,
-                'current_balance' => 0,
-                'total_spend'     => 0,
+                'party_id'         => $party->id,
+                'name'             => $validated['name'],
+                'phone'            => $validated['phone'] ?? null,
+                'cnic'             => $validated['cnic'] ?? null,
+                'address'          => $validated['address'] ?? null,
+                'notes'            => $validated['notes'] ?? null,
+                'credit_limit'     => isset($validated['credit_limit']) ? (float) $validated['credit_limit'] : 0,
+                'discount_percent' => isset($validated['discount_percent']) ? (float) $validated['discount_percent'] : 0,
+                'current_balance'  => 0,
+                'total_spend'      => 0,
             ]);
         });
 
@@ -174,13 +177,14 @@ class CustomersController extends Controller
     {
         return Inertia::render('Customers/Form', [
             'customer' => [
-                'id'           => $customer->id,
-                'name'         => $customer->name,
-                'phone'        => $customer->phone,
-                'cnic'         => $customer->cnic,
-                'address'      => $customer->address,
-                'notes'        => $customer->notes,
-                'credit_limit' => (float) $customer->credit_limit,
+                'id'               => $customer->id,
+                'name'             => $customer->name,
+                'phone'            => $customer->phone,
+                'cnic'             => $customer->cnic,
+                'address'          => $customer->address,
+                'notes'            => $customer->notes,
+                'credit_limit'     => (float) $customer->credit_limit,
+                'discount_percent' => (float) $customer->discount_percent,
             ],
         ]);
     }
@@ -188,21 +192,23 @@ class CustomersController extends Controller
     public function update(Request $request, Customer $customer): RedirectResponse
     {
         $validated = $request->validate([
-            'name'         => 'required|string|max:255',
-            'phone'        => 'nullable|string|max:20',
-            'cnic'         => 'nullable|string|max:20',
-            'address'      => 'nullable|string|max:500',
-            'notes'        => 'nullable|string|max:1000',
-            'credit_limit' => 'nullable|numeric|min:0',
+            'name'             => 'required|string|max:255',
+            'phone'            => 'required|string|max:20',
+            'cnic'             => 'nullable|string|max:20',
+            'address'          => 'nullable|string|max:500',
+            'notes'            => 'nullable|string|max:1000',
+            'credit_limit'     => 'nullable|numeric|min:0',
+            'discount_percent' => 'nullable|numeric|min:0|max:100',
         ]);
 
         $customer->update([
-            'name'         => $validated['name'],
-            'phone'        => $validated['phone'] ?? null,
-            'cnic'         => $validated['cnic'] ?? null,
-            'address'      => $validated['address'] ?? null,
-            'notes'        => $validated['notes'] ?? null,
-            'credit_limit' => isset($validated['credit_limit']) ? (float) $validated['credit_limit'] : (float) $customer->credit_limit,
+            'name'             => $validated['name'],
+            'phone'            => $validated['phone'] ?? null,
+            'cnic'             => $validated['cnic'] ?? null,
+            'address'          => $validated['address'] ?? null,
+            'notes'            => $validated['notes'] ?? null,
+            'credit_limit'     => isset($validated['credit_limit']) ? (float) $validated['credit_limit'] : (float) $customer->credit_limit,
+            'discount_percent' => isset($validated['discount_percent']) ? (float) $validated['discount_percent'] : (float) $customer->discount_percent,
         ]);
 
         return redirect()->route('customers.show', $customer)->with('success', 'Customer updated.');
@@ -265,6 +271,54 @@ class CustomersController extends Controller
         }
 
         return back()->with('success', 'Payment of Rs ' . number_format($amount) . ' recorded.');
+    }
+
+    // Void a previously recorded customer payment
+    public function voidPayment(Customer $customer, \App\Models\CustomerLedgerEntry $entry): RedirectResponse
+    {
+        if ($entry->customer_id !== $customer->id) {
+            return back()->with('error', 'Entry does not belong to this customer.');
+        }
+        if ($entry->type !== 'payment') {
+            return back()->with('error', 'Only payment entries can be voided.');
+        }
+
+        // amount on payment entries is negative (it reduces the balance)
+        $paymentAmount = abs((float) $entry->amount);
+
+        DB::transaction(function () use ($customer, $entry, $paymentAmount) {
+            // Mark original entry as voided so it can't be voided again
+            $entry->update(['type' => 'payment_voided']);
+
+            $newBalance = round((float) $customer->current_balance + $paymentAmount, 2);
+
+            DB::table('customers')
+                ->where('id', $customer->id)
+                ->update(['current_balance' => $newBalance]);
+
+            \App\Models\CustomerLedgerEntry::create([
+                'tenant_id'       => $customer->tenant_id,
+                'customer_id'     => $customer->id,
+                'sale_id'         => null,
+                'type'            => 'payment_void',
+                'amount'          => $paymentAmount,
+                'running_balance' => $newBalance,
+                'description'     => 'Payment voided' . ($entry->description ? ': ' . $entry->description : ''),
+                'payment_method'  => $entry->payment_method,
+            ]);
+        });
+
+        try {
+            \App\Services\AccountingService::reverseCustomerPayment(
+                $customer->tenant_id,
+                $paymentAmount,
+                $entry->id
+            );
+        } catch (\Throwable $e) {
+            \Log::warning("AccountingService::reverseCustomerPayment failed: " . $e->getMessage());
+        }
+
+        return back()->with('success', 'Payment of Rs ' . number_format($paymentAmount) . ' has been voided.');
     }
 
     public function enableSupplier(Customer $customer): RedirectResponse

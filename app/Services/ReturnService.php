@@ -92,27 +92,36 @@ class ReturnService
                 }
             }
 
-            // --- Customer balance update for store_credit ---
-            if ($sale->customer_id && $data['refund_method'] === 'store_credit') {
-                $currentBalance = (float) DB::table('customers')
-                    ->where('id', $sale->customer_id)
-                    ->value('current_balance') ?? 0;
+            // --- Reduce sale's udhaar_amount + update customer balance ---
+            // For any udhaar sale, a return reduces what the customer owes regardless of
+            // which refund method was selected (the method affects accounting, not the ledger).
+            $saleUdhaar = (int) $sale->udhaar_amount;
+            if ($saleUdhaar > 0) {
+                $refundAgainstUdhaar = min($totalRefund, $saleUdhaar);
 
-                $newBalance = max(0.0, $currentBalance - $totalRefund);
+                $sale->update(['udhaar_amount' => $saleUdhaar - $refundAgainstUdhaar]);
 
-                DB::table('customers')
-                    ->where('id', $sale->customer_id)
-                    ->update(['current_balance' => $newBalance]);
+                if ($sale->customer_id) {
+                    $currentBalance = (int) (DB::table('customers')
+                        ->where('id', $sale->customer_id)
+                        ->value('current_balance') ?? 0);
 
-                CustomerLedgerEntry::create([
-                    'tenant_id'       => $sale->tenant_id,
-                    'customer_id'     => $sale->customer_id,
-                    'sale_id'         => $sale->id,
-                    'type'            => 'return',
-                    'amount'          => -(int) $totalRefund,
-                    'running_balance' => (int) $newBalance,
-                    'description'     => "Return {$return->return_number}: store credit applied",
-                ]);
+                    $newBalance = max(0, $currentBalance - $refundAgainstUdhaar);
+
+                    DB::table('customers')
+                        ->where('id', $sale->customer_id)
+                        ->update(['current_balance' => $newBalance]);
+
+                    CustomerLedgerEntry::create([
+                        'tenant_id'       => $sale->tenant_id,
+                        'customer_id'     => $sale->customer_id,
+                        'sale_id'         => $sale->id,
+                        'type'            => 'return',
+                        'amount'          => -$refundAgainstUdhaar,
+                        'running_balance' => $newBalance,
+                        'description'     => "Return {$return->return_number}: udhaar reduced by Rs {$refundAgainstUdhaar}",
+                    ]);
+                }
             }
 
             // --- Update sale status ---

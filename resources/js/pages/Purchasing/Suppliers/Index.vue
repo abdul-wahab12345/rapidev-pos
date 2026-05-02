@@ -130,9 +130,9 @@ function fmt(n: number) {
 
             <!-- Stats -->
             <div class="grid grid-cols-2 gap-4 lg:grid-cols-3">
-                <StatCard title="Total Suppliers" :value="String(stats.total)"   :icon="Users"       color="blue" />
-                <StatCard title="Active"          :value="String(stats.active)"  :icon="Building2"   color="green" />
-                <StatCard title="Total Payable"   :value="fmt(stats.total_payable)" :icon="Wallet"   color="orange" />
+                <StatCard label="Total Suppliers" :value="String(stats.total)"      :icon="Users"       tone="info" />
+                <StatCard label="Active"          :value="String(stats.active)"     :icon="Building2"   tone="success" />
+                <StatCard label="Total Payable"   :value="fmt(stats.total_payable)" :icon="Wallet"      tone="warning" />
             </div>
 
             <!-- Filters -->

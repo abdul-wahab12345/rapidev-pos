@@ -91,10 +91,10 @@ function fmt(n: number) {
 
             <!-- Stats -->
             <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
-                <StatCard title="Total Orders"   :value="String(stats.total)"         :icon="ShoppingCart"  color="blue" />
-                <StatCard title="Pending"        :value="String(stats.pending)"        :icon="Clock"         color="orange" />
-                <StatCard title="Total Due"      :value="fmt(stats.total_due)"         :icon="Wallet"        color="red" />
-                <StatCard title="This Month"     :value="fmt(stats.this_month)"        :icon="TrendingUp"    color="green" />
+                <StatCard label="Total Orders"   :value="String(stats.total)"         :icon="ShoppingCart"  tone="info" />
+                <StatCard label="Pending"        :value="String(stats.pending)"        :icon="Clock"         tone="warning" />
+                <StatCard label="Total Due"      :value="fmt(stats.total_due)"         :icon="Wallet"        tone="danger" />
+                <StatCard label="This Month"     :value="fmt(stats.this_month)"        :icon="TrendingUp"    tone="success" />
             </div>
 
             <!-- Filters -->

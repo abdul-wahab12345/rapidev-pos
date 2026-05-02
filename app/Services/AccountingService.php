@@ -263,6 +263,114 @@ class AccountingService
     }
 
     /**
+     * Post a journal entry for a tracked PO payment record.
+     * Dr AP (2010), Cr Cash (1010) or Bank (1020).
+     */
+    public static function postPurchasePaymentRecord(\App\Models\PurchaseOrderPayment $payment, \App\Models\PurchaseOrder $po): void
+    {
+        $tenantId = $payment->tenant_id;
+        $accounts = self::loadAccounts($tenantId, [self::CASH, self::BANK, '2010']);
+
+        $debitAccountId  = $accounts['2010'] ?? null;
+        $creditAccountId = $payment->payment_method === 'bank'
+            ? ($accounts[self::BANK] ?? $accounts[self::CASH] ?? null)
+            : ($accounts[self::CASH] ?? null);
+
+        if (!$debitAccountId || !$creditAccountId) return;
+
+        $amount = (float) $payment->amount;
+
+        self::createEntry($tenantId, $payment->created_by ?? auth()->id(), [
+            'entry_date'     => now()->format('Y-m-d'),
+            'description'    => "Payment to {$po->supplier?->name} – {$po->po_number}",
+            'reference_type' => 'po_payment',
+            'reference_id'   => $payment->id,
+            'lines'          => [
+                ['account_id' => $debitAccountId,  'debit' => $amount, 'credit' => 0,      'description' => "AP cleared – {$po->po_number}"],
+                ['account_id' => $creditAccountId, 'debit' => 0,       'credit' => $amount, 'description' => ucfirst($payment->payment_method) . ' payment'],
+            ],
+        ]);
+    }
+
+    /**
+     * Reverse a PO payment journal entry (on void).
+     */
+    public static function reversePurchasePayment(\App\Models\PurchaseOrderPayment $payment): void
+    {
+        $original = JournalEntry::where('tenant_id', $payment->tenant_id)
+            ->where('reference_type', 'po_payment')
+            ->where('reference_id', $payment->id)
+            ->where('status', 'posted')
+            ->with('lines')
+            ->first();
+
+        if (!$original) return;
+
+        $reversalLines = $original->lines->map(fn ($l) => [
+            'account_id'  => $l->account_id,
+            'debit'       => (float) $l->credit,
+            'credit'      => (float) $l->debit,
+            'description' => 'Reversal: ' . ($l->description ?? ''),
+        ])->toArray();
+
+        self::createEntry($payment->tenant_id, auth()->id() ?? $payment->created_by, [
+            'entry_date'     => now()->format('Y-m-d'),
+            'description'    => "Void payment – {$payment->purchaseOrder?->po_number}",
+            'reference_type' => 'po_payment_void',
+            'reference_id'   => $payment->id,
+            'lines'          => $reversalLines,
+        ]);
+    }
+
+    /**
+     * Post a journal entry for a supplier return (debit note).
+     * Dr AP (2010) — reduce what we owe, Cr Inventory (1040) — reduce stock value.
+     */
+    public static function postSupplierReturn(\App\Models\SupplierReturn $return): void
+    {
+        $tenantId = $return->tenant_id;
+        $accounts = self::loadAccounts($tenantId, ['1040', '2010']);
+
+        if (!isset($accounts['2010']) || !isset($accounts['1040'])) return;
+
+        $amount = (float) $return->total_amount;
+        if ($amount <= 0) return;
+
+        self::createEntry($tenantId, $return->created_by ?? auth()->id(), [
+            'entry_date'     => now()->format('Y-m-d'),
+            'description'    => "Supplier return {$return->return_number} – {$return->purchaseOrder?->po_number}",
+            'reference_type' => 'supplier_return',
+            'reference_id'   => $return->id,
+            'lines'          => [
+                ['account_id' => $accounts['2010'], 'debit' => $amount, 'credit' => 0,      'description' => "AP reduced – {$return->return_number}"],
+                ['account_id' => $accounts['1040'], 'debit' => 0,       'credit' => $amount, 'description' => "Inventory returned – {$return->return_number}"],
+            ],
+        ]);
+    }
+
+    /**
+     * Reverse a customer payment ledger entry (on void).
+     * Dr Receivable (1030), Cr Cash (1010).
+     */
+    public static function reverseCustomerPayment(string $tenantId, float $amount, string $ledgerEntryId): void
+    {
+        $accounts = self::loadAccounts($tenantId, [self::CASH, self::RECEIVABLE]);
+
+        if (!isset($accounts[self::CASH]) || !isset($accounts[self::RECEIVABLE])) return;
+
+        self::createEntry($tenantId, auth()->id(), [
+            'entry_date'     => now()->format('Y-m-d'),
+            'description'    => 'Customer payment voided',
+            'reference_type' => 'customer_payment_void',
+            'reference_id'   => $ledgerEntryId,
+            'lines'          => [
+                ['account_id' => $accounts[self::RECEIVABLE], 'debit' => $amount, 'credit' => 0,      'description' => 'Payment reversed – udhaar restored'],
+                ['account_id' => $accounts[self::CASH],       'debit' => 0,       'credit' => $amount, 'description' => 'Cash reversed'],
+            ],
+        ]);
+    }
+
+    /**
      * Reverse an expense journal entry (on delete/update).
      */
     public static function reverseExpense(\App\Models\Expense $expense): void

@@ -10,13 +10,14 @@ class Customer extends TenantAware
 {
     protected $fillable = [
         'tenant_id', 'party_id', 'name', 'phone', 'cnic', 'address', 'notes',
-        'current_balance', 'credit_limit', 'total_spend',
+        'current_balance', 'credit_limit', 'discount_percent', 'total_spend',
     ];
 
     protected $casts = [
-        'current_balance' => 'decimal:2',
-        'credit_limit'    => 'decimal:2',
-        'total_spend'     => 'decimal:2',
+        'current_balance'  => 'decimal:2',
+        'credit_limit'     => 'decimal:2',
+        'discount_percent' => 'decimal:2',
+        'total_spend'      => 'decimal:2',
     ];
 
     public function party(): BelongsTo
