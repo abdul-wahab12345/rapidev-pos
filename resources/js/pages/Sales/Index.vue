@@ -11,8 +11,10 @@ import {
     AlertTriangle, ArrowUpRight,
     Calendar, Printer, ReceiptText, Search, ShoppingBag, X,
 } from 'lucide-vue-next';
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 
+const { t } = useI18n();
 const { confirm } = useConfirm();
 
 interface SaleRow {
@@ -52,10 +54,10 @@ const props = defineProps<{
     filters: { search?: string; date_from?: string; date_to?: string; payment?: string; status?: string };
 }>();
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Sales', href: '/sales' },
-    { title: 'All Sales', href: '/sales' },
-];
+const breadcrumbs = computed<BreadcrumbItem[]>(() => [
+    { title: t('nav.salesOrders'), href: '/sales' },
+    { title: t('sales.breadcrumbSub'), href: '/sales' },
+]);
 
 // ── Filters ──────────────────────────────────────────────────
 const search    = ref(props.filters.search    ?? '');
@@ -94,14 +96,13 @@ const hasFilters = () => !!(search.value || dateFrom.value || dateTo.value || pa
 // ── Void ─────────────────────────────────────────────────────
 async function voidSale(sale: SaleRow) {
     const ok = await confirm({
-        title: `Void ${sale.invoice_number}?`,
-        message: 'This will restore stock for all items and reverse any udhaar balance. This cannot be undone.',
-        confirmLabel: 'Yes, void sale',
-        cancelLabel: 'Cancel',
+        title: t('sales.voidConfirmTitle', { invoice: sale.invoice_number }),
+        message: t('sales.voidConfirmMessage'),
+        confirmLabel: t('sales.voidConfirmYes'),
         variant: 'danger',
     });
     if (!ok) return;
-    router.post(route('sales.void', sale.id), {}, { preserveScroll: true });
+    router.post(route('sales.void', { sale: sale.id }), {}, { preserveScroll: true });
 }
 
 // ── Print receipt from list ───────────────────────────────────
@@ -121,10 +122,34 @@ async function printSale(sale: SaleRow) {
 // ── Helpers ───────────────────────────────────────────────────
 const fmt = formatMoney;
 const fmtDate = (dt: string) => formatDateTime(dt);
+
+const paymentMethodLabels: Record<string,
+    | 'common.cash'
+    | 'common.jazzcash'
+    | 'common.easypaisa'
+    | 'common.udhaar'
+    | 'sales.split'> = {
+    cash: 'common.cash',
+    jazzcash: 'common.jazzcash',
+    easypaisa: 'common.easypaisa',
+    udhaar: 'common.udhaar',
+    mixed: 'sales.split',
+};
+
+function paymentMethodLabel(method: string) {
+    const key = paymentMethodLabels[method?.toLowerCase?.() ?? ''];
+    return key ? t(key) : method;
+}
+
+function saleStatusLabel(st: SaleRow['status']) {
+    if (st === 'completed') return t('common.completed');
+    if (st === 'voided') return t('sales.voided');
+    return st;
+}
 </script>
 
 <template>
-    <Head title="Sales" />
+    <Head :title="t('sales.pageTitle')" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex flex-col gap-6 p-6">
@@ -132,42 +157,42 @@ const fmtDate = (dt: string) => formatDateTime(dt);
             <!-- Page header -->
             <div class="flex items-center justify-between">
                 <div>
-                    <h1 class="text-2xl font-bold tracking-tight">Sales</h1>
-                    <p class="mt-0.5 text-sm text-muted-foreground">All transactions across your store</p>
+                    <h1 class="text-2xl font-bold tracking-tight">{{ t('sales.pageTitle') }}</h1>
+                    <p class="mt-0.5 text-sm text-muted-foreground">{{ t('sales.pageDescription') }}</p>
                 </div>
                 <Link
                     :href="route('pos.cashier')"
                     class="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors"
                 >
                     <ShoppingBag class="h-4 w-4" />
-                    New Sale
+                    {{ t('sales.newSale') }}
                 </Link>
             </div>
 
             <!-- Stats row -->
             <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
                 <div class="col-span-1 rounded-xl border border-border bg-card p-4">
-                    <p class="text-xs font-medium text-muted-foreground">Today's Sales</p>
+                    <p class="text-xs font-medium text-muted-foreground">{{ t('sales.todaysSales') }}</p>
                     <p class="mt-1 text-2xl font-black text-foreground">{{ stats.today_count }}</p>
                 </div>
                 <div class="col-span-1 rounded-xl border border-border bg-card p-4">
-                    <p class="text-xs font-medium text-muted-foreground">Today's Revenue</p>
+                    <p class="text-xs font-medium text-muted-foreground">{{ t('sales.todaysRevenue') }}</p>
                     <p class="mt-1 text-lg font-black text-green-600 dark:text-green-400">{{ fmt(stats.today_revenue) }}</p>
                 </div>
                 <div class="col-span-1 rounded-xl border border-border bg-card p-4">
-                    <p class="text-xs font-medium text-muted-foreground">Filtered Sales</p>
+                    <p class="text-xs font-medium text-muted-foreground">{{ t('sales.filteredSales') }}</p>
                     <p class="mt-1 text-2xl font-black text-foreground">{{ stats.total_sales }}</p>
                 </div>
                 <div class="col-span-1 rounded-xl border border-border bg-card p-4">
-                    <p class="text-xs font-medium text-muted-foreground">Filtered Revenue</p>
+                    <p class="text-xs font-medium text-muted-foreground">{{ t('sales.filteredRevenue') }}</p>
                     <p class="mt-1 text-lg font-black text-foreground">{{ fmt(stats.total_revenue) }}</p>
                 </div>
                 <div class="col-span-1 rounded-xl border border-border bg-card p-4">
-                    <p class="text-xs font-medium text-muted-foreground">Discounts Given</p>
+                    <p class="text-xs font-medium text-muted-foreground">{{ t('sales.discountsGiven') }}</p>
                     <p class="mt-1 text-lg font-black text-amber-600 dark:text-amber-400">{{ fmt(stats.total_discount) }}</p>
                 </div>
                 <div class="col-span-1 rounded-xl border border-border bg-card p-4">
-                    <p class="text-xs font-medium text-muted-foreground">Udhaar Pending</p>
+                    <p class="text-xs font-medium text-muted-foreground">{{ t('sales.udhaarPending') }}</p>
                     <p class="mt-1 text-lg font-black text-red-600 dark:text-red-400">{{ fmt(stats.total_udhaar) }}</p>
                 </div>
             </div>
@@ -176,22 +201,22 @@ const fmtDate = (dt: string) => formatDateTime(dt);
             <div class="flex flex-wrap gap-2">
                 <!-- Search -->
                 <div class="relative min-w-[200px] flex-1">
-                    <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Search class="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <input
                         v-model="search"
                         type="text"
-                        placeholder="Invoice # or customer…"
-                        class="w-full rounded-lg border border-input bg-background py-2 pl-9 pr-4 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                        :placeholder="t('sales.searchPlaceholder')"
+                        class="w-full rounded-lg border border-input bg-background py-2 ps-9 pe-4 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                     />
                 </div>
 
                 <!-- Date from -->
                 <div class="relative">
-                    <Calendar class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Calendar class="pointer-events-none absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <input
                         v-model="dateFrom"
                         type="date"
-                        class="rounded-lg border border-input bg-background py-2 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                        class="rounded-lg border border-input bg-background py-2 ps-9 pe-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                     />
                 </div>
 
@@ -204,19 +229,19 @@ const fmtDate = (dt: string) => formatDateTime(dt);
 
                 <!-- Payment method -->
                 <select v-model="payment" class="rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
-                    <option value="">All Payments</option>
-                    <option value="cash">Cash</option>
-                    <option value="jazzcash">JazzCash</option>
-                    <option value="easypaisa">Easypaisa</option>
-                    <option value="udhaar">Udhaar</option>
-                    <option value="mixed">Split</option>
+                    <option value="">{{ t('sales.allPayments') }}</option>
+                    <option value="cash">{{ t('common.cash') }}</option>
+                    <option value="jazzcash">{{ t('common.jazzcash') }}</option>
+                    <option value="easypaisa">{{ t('common.easypaisa') }}</option>
+                    <option value="udhaar">{{ t('common.udhaar') }}</option>
+                    <option value="mixed">{{ t('sales.split') }}</option>
                 </select>
 
                 <!-- Status -->
                 <select v-model="status" class="rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
-                    <option value="">All Status</option>
-                    <option value="completed">Completed</option>
-                    <option value="voided">Voided</option>
+                    <option value="">{{ t('sales.allStatus') }}</option>
+                    <option value="completed">{{ t('common.completed') }}</option>
+                    <option value="voided">{{ t('sales.voided') }}</option>
                 </select>
 
                 <!-- Clear -->
@@ -225,23 +250,23 @@ const fmtDate = (dt: string) => formatDateTime(dt);
                     @click="clearFilters"
                     class="flex items-center gap-1.5 rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground hover:border-foreground/30 hover:text-foreground transition-colors"
                 >
-                    <X class="h-3.5 w-3.5" /> Clear
+                    <X class="h-3.5 w-3.5" /> {{ t('common.clear') }}
                 </button>
             </div>
 
             <!-- Table -->
-            <div class="rounded-xl border border-border overflow-hidden">
-                <table class="w-full text-sm">
+            <div class="rounded-xl border border-border overflow-x-auto">
+                <table class="w-full border-collapse text-sm">
                     <thead class="bg-muted/50">
-                        <tr class="text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                            <th class="px-4 py-3">Invoice</th>
-                            <th class="px-4 py-3">Date & Time</th>
-                            <th class="px-4 py-3">Customer</th>
-                            <th class="px-4 py-3">Cashier</th>
-                            <th class="px-4 py-3">Payment</th>
-                            <th class="px-4 py-3 text-right">Total</th>
-                            <th class="px-4 py-3">Status</th>
-                            <th class="px-4 py-3"></th>
+                        <tr class="[&>th]:align-middle text-start text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            <th class="px-4 py-3">{{ t('sales.invoice') }}</th>
+                            <th class="px-4 py-3">{{ t('common.dateTime') }}</th>
+                            <th class="px-4 py-3">{{ t('pos.customerWord') }}</th>
+                            <th class="px-4 py-3">{{ t('sales.cashier') }}</th>
+                            <th class="px-4 py-3">{{ t('common.payment') }}</th>
+                            <th class="px-4 py-3 text-end">{{ t('common.total') }}</th>
+                            <th class="px-4 py-3 text-start">{{ t('common.status') }}</th>
+                            <th class="px-4 py-3 text-end w-48 lg:w-[22rem]"></th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-border">
@@ -249,8 +274,8 @@ const fmtDate = (dt: string) => formatDateTime(dt);
                         <tr v-if="sales.data.length === 0">
                             <td colspan="8" class="px-4 py-16 text-center">
                                 <ReceiptText class="mx-auto mb-3 h-10 w-10 text-muted-foreground/30" />
-                                <p class="text-sm text-muted-foreground">No sales found</p>
-                                <p class="mt-1 text-xs text-muted-foreground/60">Try adjusting filters or make a sale from the POS</p>
+                                <p class="text-sm text-muted-foreground">{{ t('sales.noSalesFound') }}</p>
+                                <p class="mt-1 text-xs text-muted-foreground/60">{{ t('sales.noSalesHint') }}</p>
                             </td>
                         </tr>
 
@@ -258,10 +283,10 @@ const fmtDate = (dt: string) => formatDateTime(dt);
                             v-for="sale in sales.data"
                             :key="sale.id"
                             :class="sale.status === 'voided' ? 'opacity-50' : 'hover:bg-muted/30'"
-                            class="transition-colors"
+                            class="[&>td]:align-middle transition-colors"
                         >
                             <td class="px-4 py-3">
-                                <Link :href="route('sales.show', sale.id)" class="font-mono text-xs font-semibold text-primary hover:underline">
+                                <Link :href="route('sales.show', { sale: sale.id })" class="font-mono text-xs font-semibold text-primary hover:underline">
                                     {{ sale.invoice_number }}
                                 </Link>
                             </td>
@@ -272,7 +297,7 @@ const fmtDate = (dt: string) => formatDateTime(dt);
 
                             <td class="px-4 py-3">
                                 <span v-if="sale.customer" class="text-sm font-medium text-foreground">{{ sale.customer.name }}</span>
-                                <span v-else class="text-xs text-muted-foreground">Walk-in</span>
+                                <span v-else class="text-xs text-muted-foreground">{{ t('sales.walkInLabel') }}</span>
                             </td>
 
                             <td class="px-4 py-3 text-sm text-muted-foreground">
@@ -284,46 +309,46 @@ const fmtDate = (dt: string) => formatDateTime(dt);
                                     :class="paymentBadge[sale.payment_method] ?? 'bg-muted text-muted-foreground'"
                                     class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize"
                                 >
-                                    {{ sale.payment_method }}
+                                    {{ paymentMethodLabel(sale.payment_method) }}
                                 </span>
                             </td>
 
-                            <td class="px-4 py-3 text-right font-semibold text-foreground">
+                            <td class="px-4 py-3 text-end font-semibold text-foreground">
                                 {{ fmt(sale.total) }}
                                 <p v-if="sale.udhaar_amount > 0" class="text-[11px] font-normal text-amber-600 dark:text-amber-400">
-                                    Udhaar: {{ fmt(sale.udhaar_amount) }}
+                                    {{ t('sales.udhaarLine', { amount: fmt(sale.udhaar_amount) }) }}
                                 </p>
                             </td>
 
                             <td class="px-4 py-3">
                                 <span
                                     :class="statusBadge[sale.status] ?? 'bg-muted text-muted-foreground'"
-                                    class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize"
+                                    class="inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold"
                                 >
-                                    {{ sale.status }}
+                                    {{ saleStatusLabel(sale.status) }}
                                 </span>
                             </td>
 
-                            <td class="px-4 py-3">
-                                <div class="flex items-center justify-end gap-1.5">
+                            <td class="px-4 py-3 text-end align-middle">
+                                <div class="inline-flex justify-end rtl:flex-row-reverse">
                                     <!-- Print -->
                                     <button
                                         @click="printSale(sale)"
                                         :disabled="printingId === sale.id"
                                         class="flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground hover:border-foreground/30 hover:text-foreground transition-colors disabled:opacity-40"
-                                        title="Print receipt"
+                                        :title="t('sales.printReceiptTitle')"
                                     >
                                         <Printer class="h-3 w-3" :class="printingId === sale.id ? 'animate-pulse' : ''" />
-                                        {{ printingId === sale.id ? '…' : 'Print' }}
+                                        {{ printingId === sale.id ? t('common.saving') : t('common.print') }}
                                     </button>
 
                                     <!-- View -->
                                     <Link
-                                        :href="route('sales.show', sale.id)"
+                                        :href="route('sales.show', { sale: sale.id })"
                                         class="flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground hover:border-foreground/30 hover:text-foreground transition-colors"
                                     >
                                         <ArrowUpRight class="h-3 w-3" />
-                                        View
+                                        {{ t('sales.viewSale') }}
                                     </Link>
 
                                     <!-- Void -->
@@ -333,7 +358,7 @@ const fmtDate = (dt: string) => formatDateTime(dt);
                                         class="flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground hover:border-destructive/50 hover:text-destructive transition-colors"
                                     >
                                         <AlertTriangle class="h-3 w-3" />
-                                        Void
+                                        {{ t('sales.voidSale') }}
                                     </button>
                                 </div>
                             </td>
@@ -344,7 +369,7 @@ const fmtDate = (dt: string) => formatDateTime(dt);
 
             <!-- Pagination -->
             <div v-if="sales.last_page > 1" class="flex items-center justify-between text-sm text-muted-foreground">
-                <p>{{ sales.total }} sales total</p>
+                <p>{{ t('sales.paginationSalesTotal', { count: sales.total }) }}</p>
                 <div class="flex gap-1">
                     <template v-for="link in sales.links" :key="link.label">
                         <Link

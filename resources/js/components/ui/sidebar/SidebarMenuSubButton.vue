@@ -28,9 +28,14 @@ const props = withDefaults(
         :data-active="isActive"
         :class="
             cn(
-                'flex h-7 min-w-0 -translate-x-px items-center gap-2 overflow-hidden rounded-md px-2 text-sidebar-foreground outline-none ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-sidebar-accent-foreground',
+                'flex min-h-11 min-w-0 items-start gap-2 rounded-md px-2 py-2 text-sidebar-foreground ltr:-translate-x-px rtl:translate-x-px outline-none ring-sidebar-ring',
+                'overflow-x-clip overflow-y-visible',
+                'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground',
+                'disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50',
+                '[&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:self-center [&>svg]:text-sidebar-accent-foreground',
+                '[&_[data-sidebar-nav-title]]:min-w-0 [&_[data-sidebar-nav-title]]:flex-1 [&_[data-sidebar-nav-title]]:leading-snug [&_[data-sidebar-nav-title]]:break-words',
                 'data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground',
-                size === 'sm' && 'text-xs',
+                size === 'sm' && 'text-xs py-1.5 min-h-10',
                 size === 'md' && 'text-sm',
                 'group-data-[collapsible=icon]:hidden',
                 props.class,

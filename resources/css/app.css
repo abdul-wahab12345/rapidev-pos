@@ -7,6 +7,56 @@ html {
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
 }
 
+:lang(ur) {
+    font-family: 'Noto Nastaliq Urdu', 'Jameel Noori Nastaleeq', 'Arial Unicode MS', sans-serif;
+    /* Nastaliq needs more vertical room than Instrument Sans defaults */
+    line-height: 1.65;
+    text-rendering: optimizeLegibility;
+}
+
+/* Native selects/inputs inherit html line-height + Nastaliq and blow up vertically in RTL Urdu chrome */
+html[lang='ur']
+    :where(
+        select,
+        textarea,
+        input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color'])
+    ) {
+    font-family: var(--font-sans);
+    line-height: normal;
+}
+
+html[lang='ur'] option {
+    font-family: var(--font-sans);
+    line-height: normal;
+}
+
+@supports (overflow-wrap: anywhere) {
+    :lang(ur) {
+        overflow-wrap: anywhere;
+        word-break: normal;
+    }
+}
+
+@layer components {
+    /* Sidebar: Nastaliq descenders/clusters get clipped by line-clamp utilities */
+    :lang(ur) [data-sidebar] .line-clamp-1,
+    :lang(ur) [data-sidebar] .line-clamp-2,
+    :lang(ur) [data-sidebar] .line-clamp-3 {
+        -webkit-line-clamp: unset !important;
+        line-clamp: unset !important;
+        display: block;
+        overflow: visible;
+        white-space: normal;
+    }
+
+    :lang(ur) [data-sidebar='group-label'] {
+        align-items: flex-start;
+        min-height: 2.375rem;
+        line-height: 1.65;
+        padding-block: 0.35rem;
+    }
+}
+
 @layer base {
     :root {
         --background: 0 0% 100%;
@@ -87,5 +137,10 @@ html {
 
     body {
         @apply bg-background text-foreground;
+    }
+
+    /* Latin UI: Instrument Sans reads thin with gray antialiased; subpixel-antialiased helps on macOS. */
+    html[lang='en'] body {
+        font-weight: 500;
     }
 }

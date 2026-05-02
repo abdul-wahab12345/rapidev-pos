@@ -6,13 +6,16 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
 import { formatMoney } from '@/utils/format';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ArrowUpLeft, Calendar, Eye, PackageX, RotateCcw, X } from 'lucide-vue-next';
-import { ref, watch } from 'vue';
+import { ArrowUpLeft, Calendar, Eye, RotateCcw, X } from 'lucide-vue-next';
+import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Sales', href: '/sales' },
-    { title: 'Returns & Refunds', href: '/returns' },
-];
+const { t, locale } = useI18n();
+
+const breadcrumbs = computed<BreadcrumbItem[]>(() => [
+    { title: t('nav.sales'), href: route('sales.index') },
+    { title: t('returns.pageTitle'), href: route('returns.index') },
+]);
 
 interface ReturnRow {
     id: string;
@@ -44,12 +47,13 @@ watch([search, methodFilter, dateFrom, dateTo], () => {
     filterTimer = setTimeout(() => applyFilters(), 400);
 });
 
-function applyFilters() {
-    router.get('/returns', {
-        search:         search.value || undefined,
-        refund_method:  methodFilter.value || undefined,
-        date_from:      dateFrom.value || undefined,
-        date_to:        dateTo.value || undefined,
+function applyFilters(extra: Record<string, unknown> = {}) {
+    router.get(route('returns.index'), {
+        search: search.value || undefined,
+        refund_method: methodFilter.value || undefined,
+        date_from: dateFrom.value || undefined,
+        date_to: dateTo.value || undefined,
+        ...extra,
     }, { preserveState: true, replace: true });
 }
 
@@ -64,16 +68,23 @@ function clearFilters() {
 const hasFilters = () => search.value || methodFilter.value || dateFrom.value || dateTo.value;
 
 function fmtDate(d: string) {
-    return new Date(d + 'T00:00:00').toLocaleDateString('en-PK', {
-        day: '2-digit', month: 'short', year: 'numeric',
+    const loc = locale.value === 'ur' ? 'ur-PK' : 'en-PK';
+    return new Date(d + 'T00:00:00').toLocaleDateString(loc, {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
     });
 }
 
-const methodLabel: Record<string, string> = {
-    cash: 'Cash',
-    bank: 'Bank',
-    store_credit: 'Store Credit',
-};
+const methodLabel = computed<Record<string, string>>(() => ({
+    cash: t('common.cash'),
+    bank: t('returns.bank'),
+    store_credit: t('returns.storeCredit'),
+}));
+
+function paginationQuery(page: number) {
+    applyFilters(page > 1 ? { page } : {});
+}
 
 const methodClass: Record<string, string> = {
     cash:         'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
@@ -83,33 +94,33 @@ const methodClass: Record<string, string> = {
 </script>
 
 <template>
-    <Head title="Returns & Refunds" />
+    <Head :title="t('returns.pageTitle')" />
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex flex-col gap-6 p-6">
 
             <!-- Header -->
             <div class="flex items-center justify-between">
                 <div>
-                    <h1 class="text-2xl font-bold tracking-tight">Returns & Refunds</h1>
-                    <p class="text-muted-foreground text-sm mt-1">Track all processed sale returns</p>
+                    <h1 class="text-2xl font-bold tracking-tight">{{ t('returns.pageTitle') }}</h1>
+                    <p class="text-muted-foreground text-sm mt-1">{{ t('returns.pageDescription') }}</p>
                 </div>
             </div>
 
             <!-- Stats -->
             <div class="grid grid-cols-3 gap-4">
                 <StatCard
-                    label="This Month"
+                    :label="t('common.thisMonth')"
                     :value="formatMoney(stats.this_month)"
                     :icon="Calendar"
                     tone="danger"
                 />
                 <StatCard
-                    label="This Year"
+                    :label="t('common.thisYear')"
                     :value="formatMoney(stats.this_year)"
                     :icon="ArrowUpLeft"
                 />
                 <StatCard
-                    label="Returns (YTD)"
+                    :label="t('returns.ytd')"
                     :value="String(stats.total_count)"
                     :icon="RotateCcw"
                     tone="warning"
@@ -119,20 +130,20 @@ const methodClass: Record<string, string> = {
             <!-- Filters -->
             <div class="flex flex-wrap gap-3 items-center">
                 <div class="relative flex-1 min-w-[200px]">
-                    <Input v-model="search" placeholder="Search by return # or invoice #…" class="pl-3" />
+                    <Input v-model="search" :placeholder="t('returns.searchPlaceholder')" class="ps-3" />
                 </div>
                 <select
                     v-model="methodFilter"
                     class="border-input bg-background text-foreground rounded-md border px-3 py-2 text-sm"
                 >
-                    <option value="">All Methods</option>
-                    <option value="cash">Cash</option>
-                    <option value="bank">Bank</option>
-                    <option value="store_credit">Store Credit</option>
+                    <option value="">{{ t('returns.allMethods') }}</option>
+                    <option value="cash">{{ t('common.cash') }}</option>
+                    <option value="bank">{{ t('returns.bank') }}</option>
+                    <option value="store_credit">{{ t('returns.storeCredit') }}</option>
                 </select>
                 <div class="flex items-center gap-2">
                     <Input v-model="dateFrom" type="date" class="w-36 text-sm" />
-                    <span class="text-muted-foreground text-xs">to</span>
+                    <span class="text-muted-foreground text-xs">{{ t('common.to') }}</span>
                     <Input v-model="dateTo" type="date" class="w-36 text-sm" />
                 </div>
                 <Button v-if="hasFilters()" variant="ghost" size="icon" @click="clearFilters">
@@ -141,29 +152,29 @@ const methodClass: Record<string, string> = {
             </div>
 
             <!-- Table -->
-            <div class="border rounded-xl overflow-hidden">
-                <table class="w-full text-sm">
+            <div class="border rounded-xl overflow-x-auto">
+                <table class="w-full border-collapse text-sm min-w-[640px]">
                     <thead class="bg-muted/50">
-                        <tr>
-                            <th class="px-4 py-3 text-left font-medium">Return #</th>
-                            <th class="px-4 py-3 text-left font-medium">Date</th>
-                            <th class="px-4 py-3 text-left font-medium hidden md:table-cell">Original Sale</th>
-                            <th class="px-4 py-3 text-left font-medium hidden md:table-cell">Reason</th>
-                            <th class="px-4 py-3 text-left font-medium">Method</th>
-                            <th class="px-4 py-3 text-right font-medium">Refund</th>
-                            <th class="px-4 py-3 text-right font-medium">Actions</th>
+                        <tr class="[&>th]:align-middle">
+                            <th class="px-4 py-3 text-start font-medium">{{ t('returns.returnNumber') }}</th>
+                            <th class="px-4 py-3 text-start font-medium">{{ t('common.date') }}</th>
+                            <th class="px-4 py-3 text-start font-medium hidden md:table-cell">{{ t('returns.originalSale') }}</th>
+                            <th class="px-4 py-3 text-start font-medium hidden md:table-cell">{{ t('common.reason') }}</th>
+                            <th class="px-4 py-3 text-start font-medium">{{ t('common.method') }}</th>
+                            <th class="px-4 py-3 text-end font-medium">{{ t('returns.refund') }}</th>
+                            <th class="px-4 py-3 text-end font-medium">{{ t('common.actions') }}</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y">
                         <tr v-if="returns.data.length === 0">
                             <td colspan="7" class="py-12 text-center text-muted-foreground">
-                                No returns found
+                                {{ t('returns.noReturnsFound') }}
                             </td>
                         </tr>
                         <tr
                             v-for="r in returns.data"
                             :key="r.id"
-                            class="hover:bg-muted/30 transition-colors"
+                            class="hover:bg-muted/30 transition-colors [&>td]:align-middle"
                         >
                             <td class="px-4 py-3 font-mono text-xs text-muted-foreground">
                                 {{ r.return_number }}
@@ -192,13 +203,13 @@ const methodClass: Record<string, string> = {
                                     {{ methodLabel[r.refund_method] ?? r.refund_method }}
                                 </span>
                             </td>
-                            <td class="px-4 py-3 text-right tabular-nums font-semibold text-red-600 dark:text-red-400">
+                            <td class="px-4 py-3 text-end tabular-nums font-semibold text-red-600 dark:text-red-400">
                                 −{{ formatMoney(r.total_refund) }}
                             </td>
-                            <td class="px-4 py-3">
-                                <div class="flex justify-end gap-1">
+                            <td class="px-4 py-3 text-end">
+                                <div class="inline-flex justify-end gap-1 rtl:flex-row-reverse">
                                     <Button variant="ghost" size="icon" :as="'a'"
-                                        :href="route('returns.show', r.id)" title="View details">
+                                        :href="route('returns.show', r.id)" :title="t('returns.viewDetailsTitle')">
                                         <Eye :size="15" />
                                     </Button>
                                 </div>
@@ -211,19 +222,19 @@ const methodClass: Record<string, string> = {
             <!-- Pagination -->
             <div v-if="returns.last_page > 1" class="flex items-center justify-between text-sm">
                 <span class="text-muted-foreground">
-                    Page {{ returns.current_page }} of {{ returns.last_page }} · {{ returns.total }} total
+                    {{ t('returns.paginationSummary', { current: returns.current_page, last: returns.last_page, total: returns.total }) }}
                 </span>
                 <div class="flex gap-2">
                     <Button
                         v-if="returns.current_page > 1"
                         variant="outline" size="sm"
-                        @click="router.get('/returns', { ...filters, page: returns.current_page - 1 })"
-                    >Previous</Button>
+                        @click="paginationQuery(returns.current_page - 1)"
+                    >{{ t('common.previous') }}</Button>
                     <Button
                         v-if="returns.current_page < returns.last_page"
                         variant="outline" size="sm"
-                        @click="router.get('/returns', { ...filters, page: returns.current_page + 1 })"
-                    >Next</Button>
+                        @click="paginationQuery(returns.current_page + 1)"
+                    >{{ t('common.next') }}</Button>
                 </div>
             </div>
 

@@ -5,8 +5,8 @@ export function formatMoney(n: number): string {
     return 'Rs ' + rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
-export function formatDateTime(dt: string, includeWeekday = false): string {
-    return new Date(dt).toLocaleString('en-PK', {
+export function formatDateTime(dt: string, includeWeekday = false, locale: string = 'en-PK'): string {
+    return new Date(dt).toLocaleString(locale, {
         ...(includeWeekday ? { weekday: 'short' as const } : {}),
         day: '2-digit',
         month: 'short',

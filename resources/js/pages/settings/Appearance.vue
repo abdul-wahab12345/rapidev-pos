@@ -7,22 +7,26 @@ import { type BreadcrumbItem } from '@/types';
 
 import AppLayout from '@/layouts/AppLayout.vue';
 import SettingsLayout from '@/layouts/settings/Layout.vue';
+import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 
-const breadcrumbItems: BreadcrumbItem[] = [
+const { t } = useI18n();
+
+const breadcrumbItems = computed<BreadcrumbItem[]>(() => [
     {
-        title: 'Appearance settings',
-        href: '/settings/appearance',
+        title: t('settings.appearanceTitle'),
+        href: route('appearance'),
     },
-];
+]);
 </script>
 
 <template>
     <AppLayout :breadcrumbs="breadcrumbItems">
-        <Head title="Appearance settings" />
+        <Head :title="t('settings.appearanceTitle')" />
 
         <SettingsLayout>
             <div class="space-y-6">
-                <HeadingSmall title="Appearance settings" description="Update your account's appearance settings" />
+                <HeadingSmall :title="t('settings.appearanceTitle')" :description="t('settings.appearanceSubtitle')" />
                 <AppearanceTabs />
             </div>
         </SettingsLayout>

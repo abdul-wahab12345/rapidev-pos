@@ -90,4 +90,21 @@ class BusinessSettingsController extends Controller
 
         return response()->json(['logo_url' => $url]);
     }
+
+    /** Quick switch for header / POS without posting the full business form. */
+    public function updateLanguage(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'language' => 'required|in:en,ur',
+        ]);
+
+        $tenant = auth()->user()->tenant;
+        $tenant->update([
+            'settings' => array_merge($tenant->settings ?? [], ['language' => $validated['language']]),
+        ]);
+
+        app()->setLocale($tenant->fresh()->getLanguage());
+
+        return back();
+    }
 }

@@ -12,10 +12,10 @@ export const statusBadge: Record<string, string> = {
     pending:   'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400',
 };
 
-export const ledgerTypeBadge: Record<string, { label: string; class: string }> = {
-    sale:         { label: 'Sale',         class: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
-    payment:      { label: 'Payment',      class: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
-    payment_void:   { label: 'Pmt Voided',  class: 'bg-muted text-muted-foreground line-through' },
-    payment_voided: { label: 'Voided',       class: 'bg-muted text-muted-foreground opacity-60' },
-    void:         { label: 'Void',         class: 'bg-muted text-muted-foreground' },
+export const ledgerTypeBadge: Record<string, { labelKey: string; class: string }> = {
+    sale:           { labelKey: 'badges.sale',         class: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
+    payment:        { labelKey: 'badges.payment',      class: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
+    payment_void:   { labelKey: 'badges.pmtVoided',    class: 'bg-muted text-muted-foreground line-through' },
+    payment_voided: { labelKey: 'badges.voided',       class: 'bg-muted text-muted-foreground opacity-60' },
+    void:           { labelKey: 'badges.void',         class: 'bg-muted text-muted-foreground' },
 };

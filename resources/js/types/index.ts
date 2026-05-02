@@ -20,6 +20,19 @@ export interface SharedData {
     name: string;
     quote: { message: string; author: string };
     auth: Auth;
+    tenant?: {
+        id: string;
+        name: string;
+        plan?: string | null;
+        settings?: {
+            language?: 'en' | 'ur';
+            [key: string]: unknown;
+        };
+    } | null;
+    flash?: {
+        success?: string | null;
+        error?: string | null;
+    };
     ziggy: {
         location: string;
         url: string;

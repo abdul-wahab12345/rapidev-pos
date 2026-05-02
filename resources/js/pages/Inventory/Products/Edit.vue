@@ -3,6 +3,10 @@ import ProductForm from '@/components/pos/ProductForm.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
 import { Head } from '@inertiajs/vue3';
+import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
+
+const { t } = useI18n();
 
 const props = defineProps<{
     product: {
@@ -36,15 +40,17 @@ const props = defineProps<{
     units: Array<{ value: string; label: string }>;
 }>();
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Inventory', href: '/inventory/products' },
-    { title: 'Products', href: '/inventory/products' },
+const breadcrumbs = computed<BreadcrumbItem[]>(() => [
+    { title: t('nav.inventory'), href: '/inventory/products' },
+    { title: t('nav.products'), href: '/inventory/products' },
     { title: props.product.name, href: `/inventory/products/${props.product.id}/edit` },
-];
+]);
+
+const headTitle = computed(() => t('inventory.editProductHead', { name: props.product.name }));
 </script>
 
 <template>
-    <Head :title="`Edit: ${product.name}`" />
+    <Head :title="headTitle" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex flex-col gap-6 p-6">
@@ -53,9 +59,9 @@ const breadcrumbs: BreadcrumbItem[] = [
                 <div>
                     <h1 class="text-2xl font-bold tracking-tight">{{ product.name }}</h1>
                     <p class="text-sm text-muted-foreground mt-0.5">
-                        SKU: <span class="font-mono">{{ product.sku ?? '—' }}</span>
+                        {{ t('inventory.skuLine', { sku: product.sku ?? '—' }) }}
                         <span class="mx-2 text-border">·</span>
-                        Stock: <span class="font-semibold text-foreground">{{ product.total_stock }}</span> units
+                        {{ t('inventory.stockUnitsLine', { count: product.total_stock }) }}
                     </p>
                 </div>
             </div>

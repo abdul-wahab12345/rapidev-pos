@@ -25,7 +25,7 @@ const page = usePage<SharedData>();
                 <SidebarMenuButton as-child :is-active="item.url === page.url">
                     <Link :href="item.url">
                         <component :is="item.icon" />
-                        <span>{{ item.title }}</span>
+                        <span data-sidebar-nav-title class="line-clamp-3 break-words leading-snug">{{ item.title }}</span>
                     </Link>
                 </SidebarMenuButton>
             </SidebarMenuItem>

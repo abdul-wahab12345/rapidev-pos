@@ -12,8 +12,10 @@ import { paymentBadge } from '@/constants/badges';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { AlertTriangle, ArrowLeft, ArrowUpLeft, Eye, Printer, RotateCcw } from 'lucide-vue-next';
 import { computed, reactive, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 
 const { confirm } = useConfirm();
+const { t, locale } = useI18n();
 
 interface SaleItem {
     id: string;
@@ -109,7 +111,7 @@ function submitReturn() {
         .filter(i => i.quantity_returned > 0);
 
     if (!items.length) {
-        alert('Select at least one item with quantity > 0 to return.');
+        alert(t('sales.returnNeedItemsAlert'));
         return;
     }
 
@@ -119,20 +121,35 @@ function submitReturn() {
     });
 }
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Sales', href: '/sales' },
+const breadcrumbs = computed<BreadcrumbItem[]>(() => [
+    { title: t('nav.sales'), href: route('sales.index') },
     { title: props.sale.invoice_number, href: '#' },
-];
+]);
+
+function saleStatusLabel(status: string) {
+    if (status === 'completed') return t('common.completed');
+    if (status === 'voided') return t('sales.voided');
+    if (status === 'partially_returned') return t('sales.partiallyReturned');
+    if (status === 'pending') return t('sales.pendingSale');
+    return status;
+}
+
+function refundMethodDisplay(method: string) {
+    if (method === 'cash') return t('common.cash');
+    if (method === 'bank') return t('returns.bank');
+    if (method === 'store_credit') return t('returns.storeCredit');
+    return method.replace('_', ' ');
+}
 
 const fmt = formatMoney;
-const fmtDate = (dt: string) => formatDateTime(dt, true);
+const fmtDate = (dt: string) => formatDateTime(dt, true, locale.value === 'ur' ? 'ur-PK' : 'en-PK');
 
 async function voidSale() {
     const ok = await confirm({
-        title: `Void ${props.sale.invoice_number}?`,
-        message: 'This will restore stock for all items and reverse any udhaar balance. This cannot be undone.',
-        confirmLabel: 'Yes, void sale',
-        cancelLabel: 'Cancel',
+        title: t('sales.voidConfirmTitle', { invoice: props.sale.invoice_number }),
+        message: t('sales.voidConfirmMessage'),
+        confirmLabel: t('sales.voidConfirmYes'),
+        cancelLabel: t('common.cancel'),
         variant: 'danger',
     });
     if (!ok) return;
@@ -154,15 +171,15 @@ async function printReceipt() {
 </script>
 
 <template>
-    <Head :title="`Sale ${sale.invoice_number}`" />
+    <Head :title="t('sales.salePageTitle', { invoice: sale.invoice_number })" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex flex-col gap-6 p-6 max-w-4xl">
 
             <!-- Header -->
             <div class="flex flex-wrap items-center gap-3">
-                <Link href="/sales" class="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors">
-                    <ArrowLeft class="h-4 w-4" /> Back
+                <Link :href="route('sales.index')" class="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors rtl:flex-row-reverse">
+                    <ArrowLeft class="h-4 w-4 rtl:rotate-180" /> {{ t('common.back') }}
                 </Link>
                 <div class="flex-1">
                     <div class="flex items-center gap-3">
@@ -171,8 +188,8 @@ async function printReceipt() {
                             :class="sale.status === 'completed'
                                 ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400'
                                 : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400'"
-                            class="rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize"
-                        >{{ sale.status }}</span>
+                            class="rounded-full px-2.5 py-0.5 text-xs font-semibold"
+                        >{{ saleStatusLabel(sale.status) }}</span>
                     </div>
                     <p class="mt-0.5 text-sm text-muted-foreground">{{ fmtDate(sale.created_at) }}</p>
                 </div>
@@ -183,7 +200,7 @@ async function printReceipt() {
                         class="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-accent transition-colors"
                     >
                         <Printer class="h-4 w-4" />
-                        Print Receipt
+                        {{ t('sales.printReceipt') }}
                     </button>
                     <button
                         v-if="sale.status === 'completed' || sale.status === 'partially_returned'"
@@ -191,7 +208,7 @@ async function printReceipt() {
                         class="flex items-center gap-2 rounded-lg border border-amber-300 dark:border-amber-700 px-4 py-2 text-sm font-medium text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
                     >
                         <RotateCcw class="h-4 w-4" />
-                        Process Return
+                        {{ t('sales.processReturn') }}
                     </button>
                     <button
                         v-if="sale.status === 'completed'"
@@ -199,7 +216,7 @@ async function printReceipt() {
                         class="flex items-center gap-2 rounded-lg border border-destructive/30 px-4 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
                     >
                         <AlertTriangle class="h-4 w-4" />
-                        Void Sale
+                        {{ t('sales.voidSale') }}
                     </button>
                 </div>
             </div>
@@ -208,26 +225,26 @@ async function printReceipt() {
 
                 <!-- Items table (2/3 width) -->
                 <div class="lg:col-span-2">
-                    <div class="rounded-xl border border-border overflow-hidden">
-                        <table class="w-full text-sm">
+                    <div class="rounded-xl border border-border overflow-x-auto">
+                        <table class="w-full border-collapse text-sm">
                             <thead class="bg-muted/50">
-                                <tr class="text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                    <th class="px-4 py-3">Item</th>
-                                    <th class="px-4 py-3 text-center">Qty</th>
-                                    <th class="px-4 py-3 text-right">Unit Price</th>
-                                    <th class="px-4 py-3 text-right">Total</th>
+                                <tr class="text-start text-xs font-semibold uppercase tracking-wide text-muted-foreground [&>th]:align-middle">
+                                    <th class="px-4 py-3">{{ t('sales.item') }}</th>
+                                    <th class="px-4 py-3 text-center">{{ t('common.quantity') }}</th>
+                                    <th class="px-4 py-3 text-end">{{ t('sales.unitPrice') }}</th>
+                                    <th class="px-4 py-3 text-end">{{ t('common.total') }}</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-border">
-                                <tr v-for="item in sale.items" :key="item.id" class="hover:bg-muted/20">
+                                <tr v-for="item in sale.items" :key="item.id" class="hover:bg-muted/20 [&>td]:align-middle">
                                     <td class="px-4 py-3">
                                         <p class="font-medium text-foreground">{{ item.product_name }}</p>
                                         <p v-if="item.variant_label" class="text-xs text-muted-foreground">{{ item.variant_label }}</p>
-                                        <p v-if="item.discount > 0" class="text-xs text-green-600 dark:text-green-400">Disc: −{{ fmt(item.discount) }}</p>
+                                        <p v-if="item.discount > 0" class="text-xs text-green-600 dark:text-green-400">{{ t('sales.discountLine', { amount: fmt(item.discount) }) }}</p>
                                     </td>
                                     <td class="px-4 py-3 text-center text-muted-foreground">{{ item.quantity }}</td>
-                                    <td class="px-4 py-3 text-right text-muted-foreground">{{ fmt(item.unit_price) }}</td>
-                                    <td class="px-4 py-3 text-right font-semibold text-foreground">{{ fmt(item.line_total) }}</td>
+                                    <td class="px-4 py-3 text-end text-muted-foreground">{{ fmt(item.unit_price) }}</td>
+                                    <td class="px-4 py-3 text-end font-semibold text-foreground">{{ fmt(item.line_total) }}</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -237,16 +254,16 @@ async function printReceipt() {
                     <div class="mt-4 rounded-xl border border-border bg-card p-4">
                         <div class="space-y-1.5 text-sm">
                             <div class="flex justify-between text-muted-foreground">
-                                <span>Subtotal</span><span>{{ fmt(sale.subtotal) }}</span>
+                                <span>{{ t('common.subtotal') }}</span><span>{{ fmt(sale.subtotal) }}</span>
                             </div>
                             <div v-if="sale.discount > 0" class="flex justify-between text-green-600 dark:text-green-400">
-                                <span>Discount</span><span>−{{ fmt(sale.discount) }}</span>
+                                <span>{{ t('common.discount') }}</span><span>−{{ fmt(sale.discount) }}</span>
                             </div>
                             <div v-if="sale.tax > 0" class="flex justify-between text-muted-foreground">
-                                <span>Tax</span><span>{{ fmt(sale.tax) }}</span>
+                                <span>{{ t('common.tax') }}</span><span>{{ fmt(sale.tax) }}</span>
                             </div>
                             <div class="flex justify-between border-t border-border pt-2 text-base font-bold text-foreground">
-                                <span>Total</span>
+                                <span>{{ t('common.total') }}</span>
                                 <span class="text-primary">{{ fmt(sale.total) }}</span>
                             </div>
                         </div>
@@ -258,22 +275,22 @@ async function printReceipt() {
 
                     <!-- Sale info -->
                     <div class="rounded-xl border border-border bg-card p-4">
-                        <h3 class="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Sale Info</h3>
+                        <h3 class="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{{ t('sales.saleInfo') }}</h3>
                         <dl class="space-y-2 text-sm">
                             <div class="flex justify-between">
-                                <dt class="text-muted-foreground">Branch</dt>
+                                <dt class="text-muted-foreground">{{ t('common.branch') }}</dt>
                                 <dd class="font-medium text-foreground">{{ sale.branch?.name ?? '—' }}</dd>
                             </div>
                             <div class="flex justify-between">
-                                <dt class="text-muted-foreground">Cashier</dt>
+                                <dt class="text-muted-foreground">{{ t('sales.cashier') }}</dt>
                                 <dd class="font-medium text-foreground">{{ sale.cashier?.name ?? '—' }}</dd>
                             </div>
                             <div class="flex justify-between">
-                                <dt class="text-muted-foreground">Customer</dt>
-                                <dd class="font-medium text-foreground">{{ sale.customer?.name ?? 'Walk-in' }}</dd>
+                                <dt class="text-muted-foreground">{{ t('common.customer') }}</dt>
+                                <dd class="font-medium text-foreground">{{ sale.customer?.name ?? t('sales.walkInLabel') }}</dd>
                             </div>
                             <div v-if="sale.customer?.phone" class="flex justify-between">
-                                <dt class="text-muted-foreground">Phone</dt>
+                                <dt class="text-muted-foreground">{{ t('common.phone') }}</dt>
                                 <dd class="font-medium text-foreground">{{ sale.customer.phone }}</dd>
                             </div>
                         </dl>
@@ -281,7 +298,7 @@ async function printReceipt() {
 
                     <!-- Payment breakdown -->
                     <div class="rounded-xl border border-border bg-card p-4">
-                        <h3 class="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Payment</h3>
+                        <h3 class="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{{ t('common.payment') }}</h3>
 
                         <span
                             :class="paymentBadge[sale.payment_method] ?? 'bg-muted text-muted-foreground'"
@@ -290,23 +307,23 @@ async function printReceipt() {
 
                         <dl class="mt-2 space-y-1.5 text-sm">
                             <div v-if="sale.cash_amount > 0" class="flex justify-between">
-                                <dt class="text-muted-foreground">Cash</dt>
+                                <dt class="text-muted-foreground">{{ t('common.cash') }}</dt>
                                 <dd class="font-medium">{{ fmt(sale.cash_amount) }}</dd>
                             </div>
                             <div v-if="sale.jazzcash_amount > 0" class="flex justify-between">
-                                <dt class="text-muted-foreground">JazzCash</dt>
+                                <dt class="text-muted-foreground">{{ t('common.jazzcash') }}</dt>
                                 <dd class="font-medium">{{ fmt(sale.jazzcash_amount) }}</dd>
                             </div>
                             <div v-if="sale.easypaisa_amount > 0" class="flex justify-between">
-                                <dt class="text-muted-foreground">Easypaisa</dt>
+                                <dt class="text-muted-foreground">{{ t('common.easypaisa') }}</dt>
                                 <dd class="font-medium">{{ fmt(sale.easypaisa_amount) }}</dd>
                             </div>
                             <div v-if="sale.udhaar_amount > 0" class="flex justify-between text-amber-600 dark:text-amber-400">
-                                <dt>Udhaar</dt>
+                                <dt>{{ t('common.udhaar') }}</dt>
                                 <dd class="font-semibold">{{ fmt(sale.udhaar_amount) }}</dd>
                             </div>
                             <div v-if="sale.change_amount > 0" class="flex justify-between border-t border-border pt-1.5 text-green-600 dark:text-green-400">
-                                <dt>Change Given</dt>
+                                <dt>{{ t('sales.changeGiven') }}</dt>
                                 <dd class="font-semibold">{{ fmt(sale.change_amount) }}</dd>
                             </div>
                         </dl>
@@ -314,7 +331,7 @@ async function printReceipt() {
 
                     <!-- Notes -->
                     <div v-if="sale.notes" class="rounded-xl border border-border bg-card p-4">
-                        <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Notes</h3>
+                        <h3 class="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{{ t('common.notes') }}</h3>
                         <p class="text-sm text-foreground">{{ sale.notes }}</p>
                     </div>
 
@@ -322,35 +339,35 @@ async function printReceipt() {
             </div>
 
             <!-- Returns history -->
-            <div v-if="sale.returns.length" class="rounded-xl border border-border overflow-hidden">
+            <div v-if="sale.returns.length" class="rounded-xl border border-border overflow-x-auto">
                 <div class="bg-muted/50 px-4 py-3 flex items-center gap-2">
                     <ArrowUpLeft class="h-4 w-4 text-muted-foreground" />
-                    <h3 class="text-sm font-semibold">Returns</h3>
+                    <h3 class="text-sm font-semibold">{{ t('sales.returnsSectionTitle') }}</h3>
                 </div>
-                <table class="w-full text-sm">
+                <table class="w-full border-collapse text-sm min-w-[520px]">
                     <thead class="bg-muted/30">
-                        <tr class="text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                            <th class="px-4 py-2">Return #</th>
-                            <th class="px-4 py-2">Date</th>
-                            <th class="px-4 py-2">Method</th>
-                            <th class="px-4 py-2 hidden sm:table-cell">Reason</th>
-                            <th class="px-4 py-2 text-right">Refund</th>
+                        <tr class="text-start text-xs font-medium uppercase tracking-wide text-muted-foreground [&>th]:align-middle">
+                            <th class="px-4 py-2">{{ t('returns.returnNumber') }}</th>
+                            <th class="px-4 py-2">{{ t('common.date') }}</th>
+                            <th class="px-4 py-2">{{ t('common.method') }}</th>
+                            <th class="px-4 py-2 hidden sm:table-cell">{{ t('common.reason') }}</th>
+                            <th class="px-4 py-2 text-end">{{ t('returns.refund') }}</th>
                             <th class="px-4 py-2"></th>
                         </tr>
                     </thead>
                     <tbody class="divide-y">
-                        <tr v-for="r in sale.returns" :key="r.id" class="hover:bg-muted/20">
+                        <tr v-for="r in sale.returns" :key="r.id" class="hover:bg-muted/20 [&>td]:align-middle">
                             <td class="px-4 py-2.5 font-mono text-xs text-muted-foreground">{{ r.return_number }}</td>
                             <td class="px-4 py-2.5 text-xs">{{ r.return_date }}</td>
-                            <td class="px-4 py-2.5 text-xs capitalize">{{ r.refund_method.replace('_', ' ') }}</td>
+                            <td class="px-4 py-2.5 text-xs">{{ refundMethodDisplay(r.refund_method) }}</td>
                             <td class="px-4 py-2.5 text-xs text-muted-foreground hidden sm:table-cell">{{ r.reason ?? '—' }}</td>
-                            <td class="px-4 py-2.5 text-right font-semibold text-red-600 dark:text-red-400 text-xs tabular-nums">
+                            <td class="px-4 py-2.5 text-end font-semibold text-red-600 dark:text-red-400 text-xs tabular-nums">
                                 −{{ fmt(r.total_refund) }}
                             </td>
-                            <td class="px-4 py-2.5 text-right">
+                            <td class="px-4 py-2.5 text-end">
                                 <Link :href="route('returns.show', r.id)"
-                                    class="text-xs text-primary hover:underline flex items-center justify-end gap-1">
-                                    <Eye class="h-3 w-3" /> View
+                                    class="inline-flex items-center justify-end gap-1 text-xs text-primary hover:underline rtl:flex-row-reverse">
+                                    <Eye class="h-3 w-3" /> {{ t('common.view') }}
                                 </Link>
                             </td>
                         </tr>
@@ -365,27 +382,27 @@ async function printReceipt() {
     <Dialog :open="showReturnModal" @update:open="showReturnModal = $event">
         <DialogContent class="max-w-2xl">
             <DialogHeader>
-                <DialogTitle>Process Return — {{ sale.invoice_number }}</DialogTitle>
+                <DialogTitle>{{ t('sales.processReturnModalTitle', { invoice: sale.invoice_number }) }}</DialogTitle>
             </DialogHeader>
 
             <div class="space-y-4 mt-2">
 
                 <!-- Items table -->
-                <div class="rounded-xl border overflow-hidden">
-                    <table class="w-full text-sm">
+                <div class="rounded-xl border overflow-x-auto">
+                    <table class="w-full border-collapse text-sm">
                         <thead class="bg-muted/50">
-                            <tr class="text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                                <th class="px-3 py-2">Item</th>
-                                <th class="px-3 py-2 text-center">Sold</th>
-                                <th class="px-3 py-2 text-center">Returnable</th>
-                                <th class="px-3 py-2 text-center w-24">Return Qty</th>
-                                <th class="px-3 py-2 text-center">Restock</th>
+                            <tr class="text-start text-xs font-medium uppercase tracking-wide text-muted-foreground [&>th]:align-middle">
+                                <th class="px-3 py-2">{{ t('sales.item') }}</th>
+                                <th class="px-3 py-2 text-center">{{ t('sales.sold') }}</th>
+                                <th class="px-3 py-2 text-center">{{ t('sales.returnable') }}</th>
+                                <th class="px-3 py-2 text-center w-24">{{ t('returns.returnQty') }}</th>
+                                <th class="px-3 py-2 text-center">{{ t('inventory.restock') }}</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y">
                             <tr v-for="item in sale.items" :key="item.id"
                                 :class="item.quantity_returnable === 0 ? 'opacity-40' : ''"
-                                class="hover:bg-muted/20">
+                                class="hover:bg-muted/20 [&>td]:align-middle">
                                 <td class="px-3 py-2">
                                     <p class="font-medium text-xs">{{ item.product_name }}</p>
                                     <p v-if="item.variant_label" class="text-xs text-muted-foreground">{{ item.variant_label }}</p>
@@ -421,37 +438,37 @@ async function printReceipt() {
                 <!-- Refund method + reason -->
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <Label class="text-xs">Refund Method *</Label>
-                        <div class="flex gap-3 mt-2">
+                        <Label class="text-xs">{{ t('sales.refundMethodRequired') }}</Label>
+                        <div class="flex gap-3 mt-2 flex-wrap">
                             <label class="flex items-center gap-1.5 cursor-pointer text-sm">
-                                <input type="radio" v-model="returnForm.refund_method" value="cash" class="accent-primary" /> Cash
+                                <input type="radio" v-model="returnForm.refund_method" value="cash" class="accent-primary" /> {{ t('common.cash') }}
                             </label>
                             <label class="flex items-center gap-1.5 cursor-pointer text-sm">
-                                <input type="radio" v-model="returnForm.refund_method" value="bank" class="accent-primary" /> Bank
+                                <input type="radio" v-model="returnForm.refund_method" value="bank" class="accent-primary" /> {{ t('returns.bank') }}
                             </label>
                             <label v-if="sale.customer" class="flex items-center gap-1.5 cursor-pointer text-sm">
-                                <input type="radio" v-model="returnForm.refund_method" value="store_credit" class="accent-primary" /> Store Credit
+                                <input type="radio" v-model="returnForm.refund_method" value="store_credit" class="accent-primary" /> {{ t('returns.storeCredit') }}
                             </label>
                         </div>
                         <p v-if="returnForm.refund_method === 'store_credit'" class="mt-1 text-xs text-amber-600 dark:text-amber-400">
-                            Will reduce customer's udhaar balance.
+                            {{ t('returns.udhaarReductionNote') }}
                         </p>
                     </div>
                     <div>
-                        <Label class="text-xs">Reason</Label>
-                        <Input v-model="returnForm.reason" class="mt-1 text-sm" placeholder="Defective, wrong item…" />
+                        <Label class="text-xs">{{ t('common.reason') }}</Label>
+                        <Input v-model="returnForm.reason" class="mt-1 text-sm" :placeholder="t('sales.returnReasonPlaceholder')" />
                     </div>
                 </div>
 
                 <!-- Notes -->
                 <div>
-                    <Label class="text-xs">Internal Notes</Label>
-                    <Input v-model="returnForm.notes" class="mt-1 text-sm" placeholder="Optional" />
+                    <Label class="text-xs">{{ t('returns.internalNotes') }}</Label>
+                    <Input v-model="returnForm.notes" class="mt-1 text-sm" :placeholder="t('common.optionalHint')" />
                 </div>
 
                 <!-- Refund total preview -->
                 <div class="rounded-lg bg-muted/50 px-4 py-3 flex justify-between items-center">
-                    <span class="text-sm font-medium">Total Refund</span>
+                    <span class="text-sm font-medium">{{ t('returns.totalRefund') }}</span>
                     <span class="text-lg font-bold text-red-600 dark:text-red-400">
                         −{{ fmt(computedRefundTotal) }}
                     </span>
@@ -460,13 +477,13 @@ async function printReceipt() {
             </div>
 
             <DialogFooter class="pt-2">
-                <Button type="button" variant="outline" @click="showReturnModal = false">Cancel</Button>
+                <Button type="button" variant="outline" @click="showReturnModal = false">{{ t('common.cancel') }}</Button>
                 <Button
                     @click="submitReturn"
                     :disabled="returnForm.processing || computedRefundTotal === 0"
                     class="bg-amber-600 hover:bg-amber-700 text-white"
                 >
-                    Process Return
+                    {{ t('sales.processReturn') }}
                 </Button>
             </DialogFooter>
         </DialogContent>

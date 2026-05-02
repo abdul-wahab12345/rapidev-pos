@@ -11,8 +11,10 @@ import {
     Plus, Search, ShoppingCart, Tag, User, UserPlus, X,
 } from 'lucide-vue-next';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 
 const { confirm } = useConfirm();
+const { t } = useI18n();
 
 const props = defineProps<{
     categories: Array<{ id: string; name: string; color: string }>;
@@ -36,6 +38,26 @@ async function refreshStats() {
 }
 
 const cart = useCartStore();
+const fmt = formatMoney;
+
+const paymentMethods = computed(() => [
+    { id: 'cash',      label: t('common.cash') },
+    { id: 'jazzcash',  label: t('common.jazzcash') },
+    { id: 'easypaisa', label: t('common.easypaisa') },
+    { id: 'udhaar',    label: t('common.udhaar') },
+    { id: 'mixed',     label: t('sales.split') },
+]);
+
+const displayChargeLabel = computed(() => {
+    if (cart.items.length === 0) return t('pos.addItemsToStart');
+    if (cart.paymentMethod === 'cash' && cart.cashReceived < cart.total) {
+        return t('pos.needMoreCash', { amount: fmt(cart.total - cart.cashReceived) });
+    }
+    if (cart.paymentMethod === 'udhaar' && !cart.selectedCustomer) {
+        return t('pos.selectCustomerUdhaarCharge');
+    }
+    return t('pos.chargeButton', { amount: fmt(cart.total) });
+});
 
 // ── Product search ──────────────────────────────────────────────
 const search = ref('');
@@ -115,8 +137,8 @@ function openAddCustomer() {
 }
 
 async function saveNewCustomer() {
-    if (!newCustomer.value.name.trim()) { addCustomerError.value = 'Name is required'; return; }
-    if (!newCustomer.value.phone.trim()) { addCustomerError.value = 'Phone is required'; return; }
+    if (!newCustomer.value.name.trim()) { addCustomerError.value = t('pos.nameRequired'); return; }
+    if (!newCustomer.value.phone.trim()) { addCustomerError.value = t('pos.phoneRequired'); return; }
     addingCustomer.value = true;
     addCustomerError.value = '';
     try {
@@ -125,7 +147,7 @@ async function saveNewCustomer() {
         selectCustomer(customer);
         showAddCustomer.value = false;
     } catch (e: any) {
-        addCustomerError.value = e.response?.data?.message ?? 'Failed to create customer';
+        addCustomerError.value = e.response?.data?.message ?? t('pos.failedCustomer');
     } finally {
         addingCustomer.value = false;
     }
@@ -180,7 +202,9 @@ async function submitSale() {
         );
 
         if (!stockCheck.ok) {
-            stockError.value = stockCheck.errors.map(e => `${e.name}: only ${e.available} left`).join('\n');
+            stockError.value = stockCheck.errors.map(e =>
+                t('pos.stockLine', { name: e.name, count: String(e.available) }),
+            ).join('\n');
             cart.isProcessing = false;
             return;
         }
@@ -195,7 +219,7 @@ async function submitSale() {
             refreshStats();
         }
     } catch (e: any) {
-        stockError.value = e.response?.data?.error ?? 'Sale failed. Please try again.';
+        stockError.value = e.response?.data?.error ?? t('pos.saleFailed');
     } finally {
         cart.isProcessing = false;
     }
@@ -254,26 +278,20 @@ function printReceipt() {
 
 // ── Keyboard shortcuts ──────────────────────────────────────────
 function handleKey(e: KeyboardEvent) {
-    if (e.key === 'F1') { e.preventDefault(); (document.querySelector('input[placeholder*="barcode"]') as HTMLInputElement)?.focus(); }
+    if (e.key === 'F1') {
+        e.preventDefault();
+        (document.querySelector('input.pos-search-input') as HTMLInputElement)?.focus();
+    }
     if (e.key === 'Escape') { cart.showPaymentModal = false; cart.showCustomerPanel = false; showAddCustomer.value = false; expandedItemIdx.value = null; stockError.value = ''; }
     if (e.key === 'F12') { e.preventDefault(); if (cart.items.length > 0) cart.showPaymentModal = true; }
 }
 onMounted(() => window.addEventListener('keydown', handleKey));
 onUnmounted(() => window.removeEventListener('keydown', handleKey));
 
-const fmt = formatMoney;
-
-const paymentMethods = [
-    { id: 'cash',      label: 'Cash' },
-    { id: 'jazzcash',  label: 'JazzCash' },
-    { id: 'easypaisa', label: 'Easypaisa' },
-    { id: 'udhaar',    label: 'Udhaar' },
-    { id: 'mixed',     label: 'Split' },
-];
 </script>
 
 <template>
-    <Head title="POS Cashier" />
+    <Head :title="t('nav.posCashier')" />
 
     <PosLayout>
 
@@ -285,15 +303,15 @@ const paymentMethods = [
             <!-- Search -->
             <div class="shrink-0 px-4 pt-3 pb-2">
                 <div class="relative">
-                    <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground rtl:left-auto rtl:right-3" />
                     <input
                         v-model="search"
                         type="text"
-                        placeholder="Search product or scan barcode… (F1)"
+                        :placeholder="t('pos.searchPlaceholder')"
                         :dir="isUrdu(search) ? 'rtl' : 'ltr'"
-                        class="w-full rounded-lg border border-input bg-background py-2.5 pl-9 pr-9 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                        class="pos-search-input w-full rounded-lg border border-input bg-background py-2.5 ps-9 pe-9 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                     />
-                    <button v-if="search" @click="search = ''" class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                    <button v-if="search" @click="search = ''" class="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground rtl:right-auto rtl:left-3">
                         <X class="h-3.5 w-3.5" />
                     </button>
                 </div>
@@ -307,7 +325,7 @@ const paymentMethods = [
                         ? 'bg-primary text-primary-foreground border-primary'
                         : 'border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground'"
                     class="shrink-0 rounded-full border px-3.5 py-1 text-xs font-medium transition-all"
-                >All</button>
+                >{{ t('common.all') }}</button>
                 <button
                     v-for="cat in categories"
                     :key="cat.id"
@@ -328,7 +346,7 @@ const paymentMethods = [
                 <!-- Empty -->
                 <div v-else-if="products.length === 0" class="flex h-44 flex-col items-center justify-center text-muted-foreground">
                     <ShoppingCart class="mb-2 h-8 w-8 opacity-30" />
-                    <p class="text-sm">No products found</p>
+                    <p class="text-sm">{{ t('pos.noProductsFound') }}</p>
                 </div>
 
                 <!-- Grid -->
@@ -355,7 +373,7 @@ const paymentMethods = [
 
                         <!-- Out of stock -->
                         <span v-if="product.stock === 0" class="absolute inset-0 flex items-center justify-center rounded-xl text-xs font-semibold text-muted-foreground">
-                            Out of stock
+                            {{ t('pos.outOfStock') }}
                         </span>
 
                         <p class="pr-6 text-[13px] font-medium leading-snug text-foreground line-clamp-2">{{ product.name }}</p>
@@ -374,21 +392,21 @@ const paymentMethods = [
                 <div class="grid grid-cols-4 divide-x divide-border text-center text-[11px]">
                     <div>
                         <p class="font-bold text-foreground">{{ products.length }}</p>
-                        <p class="text-muted-foreground">Showing</p>
+                        <p class="text-muted-foreground">{{ t('pos.showing') }}</p>
                     </div>
                     <div>
                         <p class="font-bold text-green-600 dark:text-green-400">{{ liveStats.sales_today }}</p>
-                        <p class="text-muted-foreground">Sales Today</p>
+                        <p class="text-muted-foreground">{{ t('pos.salesToday') }}</p>
                     </div>
                     <div>
                         <p class="font-bold text-foreground">{{ fmt(liveStats.revenue_today) }}</p>
-                        <p class="text-muted-foreground">Revenue</p>
+                        <p class="text-muted-foreground">{{ t('pos.revenue') }}</p>
                     </div>
                     <div>
                         <p :class="liveStats.low_stock > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-foreground'" class="font-bold">
                             {{ liveStats.low_stock }}
                         </p>
-                        <p class="text-muted-foreground">Low Stock</p>
+                        <p class="text-muted-foreground">{{ t('pos.lowStock') }}</p>
                     </div>
                 </div>
             </div>
@@ -402,12 +420,12 @@ const paymentMethods = [
             <!-- Cart header -->
             <div class="shrink-0 border-b border-border px-4 py-3">
                 <div class="flex items-center gap-2">
-                    <span class="text-sm font-semibold text-foreground">Current Sale</span>
+                    <span class="text-sm font-semibold text-foreground">{{ t('pos.currentSale') }}</span>
                     <span v-if="cart.itemCount > 0" class="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-bold text-primary-foreground">
                         {{ cart.itemCount }}
                     </span>
 
-                    <div class="ml-auto flex items-center gap-2">
+                    <div class="ms-auto flex items-center gap-2">
                         <!-- ★ Customer button — always visible ★ -->
                         <button
                             @click="cart.showCustomerPanel = !cart.showCustomerPanel; customerSearch = ''"
@@ -419,18 +437,23 @@ const paymentMethods = [
                             ]"
                         >
                             <User class="h-3.5 w-3.5" />
-                            <span class="max-w-[90px] truncate">{{ cart.selectedCustomer ? cart.selectedCustomer.name : 'Customer' }}</span>
+                            <span class="max-w-[90px] truncate">{{ cart.selectedCustomer ? cart.selectedCustomer.name : t('pos.customerWord') }}</span>
                             <ChevronDown class="h-3 w-3 opacity-50" />
                         </button>
 
                         <button
                             v-if="cart.items.length > 0"
                             @click="async () => {
-                                const ok = await confirm({ title: 'Clear cart?', message: 'All items will be removed from the current sale.', confirmLabel: 'Clear', variant: 'warning' });
+                                const ok = await confirm({
+                                    title: t('pos.clearCart'),
+                                    message: t('pos.clearCartMessage'),
+                                    confirmLabel: t('pos.clearCartConfirmBtn'),
+                                    variant: 'warning',
+                                });
                                 if (ok) { cart.clearCart(); discountInput = 0; }
                             }"
                             class="text-xs text-muted-foreground hover:text-destructive transition-colors"
-                        >Clear</button>
+                        >{{ t('common.clear') }}</button>
                     </div>
                 </div>
             </div>
@@ -439,20 +462,20 @@ const paymentMethods = [
             <div v-if="cart.showCustomerPanel" class="shrink-0 border-b border-border bg-muted/40 px-4 py-3">
                 <!-- Header with "+ New Customer" button -->
                 <div class="mb-2 flex items-center justify-between">
-                    <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Select Customer</p>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{{ t('pos.selectCustomer') }}</p>
                     <button
                         @click="openAddCustomer"
                         class="flex items-center gap-1 rounded-md border border-dashed border-primary/50 px-2.5 py-1 text-xs font-medium text-primary hover:border-primary hover:bg-primary/10 transition-colors"
                     >
                         <UserPlus class="h-3 w-3" />
-                        Add New
+                        {{ t('pos.addNewMini') }}
                     </button>
                 </div>
 
                 <input
                     v-model="customerSearch"
                     type="text"
-                    placeholder="Search by name or phone…"
+                    :placeholder="t('pos.searchCustomer')"
                     class="mb-2 w-full rounded-lg border border-input bg-background px-3 py-1.5 text-xs placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                 />
 
@@ -473,14 +496,14 @@ const paymentMethods = [
                             <p class="text-muted-foreground">{{ c.phone || '—' }}</p>
                         </div>
                         <span :class="c.balance > 0 ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'" class="ml-2 shrink-0 text-[11px]">
-                            {{ c.balance > 0 ? fmt(c.balance) : 'Clear' }}
+                            {{ c.balance > 0 ? fmt(c.balance) : t('customers.balanceClearLabel') }}
                         </span>
                     </button>
 
                     <button
                         @click="clearCustomer"
                         class="w-full py-2 text-center text-xs text-muted-foreground hover:text-foreground transition-colors"
-                    >Walk-in / no customer</button>
+                    >{{ t('pos.walkIn') }}</button>
                 </div>
             </div>
 
@@ -493,11 +516,11 @@ const paymentMethods = [
                         <div class="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/40">
                             <Check class="h-6 w-6 text-green-600 dark:text-green-400" />
                         </div>
-                        <p class="text-base font-bold text-green-600 dark:text-green-400">Sale Complete!</p>
+                        <p class="text-base font-bold text-green-600 dark:text-green-400">{{ t('pos.saleComplete') }}</p>
                         <p class="mt-0.5 text-xs text-muted-foreground">{{ cart.lastSale.invoice_number }}</p>
 
                         <div v-if="cart.lastSale.change > 0" class="mt-3 rounded-xl bg-muted px-4 py-3">
-                            <p class="text-xs text-muted-foreground">Change due</p>
+                            <p class="text-xs text-muted-foreground">{{ t('pos.changeDue') }}</p>
                             <p class="text-2xl font-black text-foreground">{{ fmt(cart.lastSale.change) }}</p>
                         </div>
 
@@ -509,11 +532,11 @@ const paymentMethods = [
                                 <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
                                 </svg>
-                                Print Receipt
+                                {{ t('pos.printReceipt') }}
                             </button>
                         </div>
                         <button @click="newSale()" class="mt-3 text-xs text-primary hover:text-primary/80 transition-colors font-medium">
-                            + Start new sale
+                            {{ t('pos.newSale') }}
                         </button>
                     </div>
                 </div>
@@ -521,8 +544,8 @@ const paymentMethods = [
                 <!-- Empty cart -->
                 <div v-else-if="cart.items.length === 0" class="flex h-full flex-col items-center justify-center px-6 text-muted-foreground">
                     <ShoppingCart class="mb-3 h-10 w-10 opacity-20" />
-                    <p class="text-sm font-medium">Cart is empty</p>
-                    <p class="mt-1 text-xs">Tap a product or scan barcode</p>
+                    <p class="text-sm font-medium">{{ t('pos.cartEmpty') }}</p>
+                    <p class="mt-1 text-xs">{{ t('pos.cartEmptyHint') }}</p>
                 </div>
 
                 <!-- Items -->
@@ -578,14 +601,14 @@ const paymentMethods = [
                                     ]"
                                 >
                                     <Tag class="h-2.5 w-2.5" />
-                                    {{ item.discount > 0 ? 'Edit' : 'Disc' }}
+                                    {{ item.discount > 0 ? t('pos.editDisc') : t('pos.addDisc') }}
                                 </button>
                             </div>
                         </div>
 
                         <!-- Item discount input (expanded) -->
                         <div v-if="expandedItemIdx === idx" class="mt-2 flex items-center gap-2 border-t border-border pt-2">
-                            <span class="text-xs text-muted-foreground">Discount (Rs):</span>
+                            <span class="text-xs text-muted-foreground">{{ t('pos.discountRs') }}</span>
                             <input
                                 v-model.number="itemDiscountInput"
                                 type="number"
@@ -594,8 +617,8 @@ const paymentMethods = [
                                 class="w-24 rounded-lg border border-input bg-background px-2 py-1 text-right text-xs focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                                 @keydown.enter="applyItemDiscount(idx)"
                             />
-                            <button @click="applyItemDiscount(idx)" class="rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors">Apply</button>
-                            <button @click="cart.setItemDiscount(idx, 0); itemDiscountInput = 0; expandedItemIdx = null" class="text-xs text-muted-foreground hover:text-destructive transition-colors">Clear</button>
+                            <button @click="applyItemDiscount(idx)" class="rounded-lg bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground hover:bg-primary/90 transition-colors">{{ t('pos.apply') }}</button>
+                            <button @click="cart.setItemDiscount(idx, 0); itemDiscountInput = 0; expandedItemIdx = null" class="text-xs text-muted-foreground hover:text-destructive transition-colors">{{ t('pos.discountClear') }}</button>
                         </div>
                     </div>
                 </div>
@@ -607,7 +630,7 @@ const paymentMethods = [
                 <!-- Totals -->
                 <div class="space-y-1 text-[13px]">
                     <div class="flex justify-between text-muted-foreground">
-                        <span>Subtotal</span>
+                        <span>{{ t('common.subtotal') }}</span>
                         <span class="text-foreground">{{ fmt(cart.subtotal) }}</span>
                     </div>
 
@@ -621,8 +644,8 @@ const paymentMethods = [
                             ]"
                         >
                             <Percent class="h-3.5 w-3.5" />
-                            Discount
-                            <span v-if="discountLabel" class="ml-1 text-xs">({{ discountLabel }})</span>
+                            {{ t('pos.discountRowLabel') }}
+                            <span v-if="discountLabel" class="ms-1 text-xs">({{ discountLabel }})</span>
                         </button>
                         <span :class="cart.cartDiscount > 0 ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'">
                             {{ cart.cartDiscount > 0 ? `−${fmt(cart.cartDiscount)}` : '—' }}
@@ -648,7 +671,7 @@ const paymentMethods = [
                             type="number"
                             min="0"
                             :max="discountType === 'percent' ? 100 : cart.subtotal"
-                            :placeholder="discountType === 'percent' ? '0–100' : 'Amount'"
+                            :placeholder="discountType === 'percent' ? t('pos.placeholderPercentRange') : t('pos.placeholderAmountShort')"
                             class="flex-1 bg-transparent text-right text-sm text-foreground focus:outline-none"
                         />
                         <button @click="discountInput = 0; cart.cartDiscount = 0" class="text-muted-foreground hover:text-destructive transition-colors">
@@ -656,16 +679,16 @@ const paymentMethods = [
                         </button>
                     </div>
 
-                    <!-- Total -->
+                    <!-- Total row subtotal section -->
                     <div class="flex items-baseline justify-between border-t border-border pt-2">
-                        <span class="font-bold text-foreground">Total</span>
+                        <span class="font-bold text-foreground">{{ t('common.total') }}</span>
                         <span class="text-2xl font-black text-primary">{{ fmt(cart.total) }}</span>
                     </div>
                 </div>
 
                 <!-- Payment method -->
                 <div class="mt-3">
-                    <p class="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Payment method</p>
+                    <p class="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{{ t('pos.paymentMethodLabel') }}</p>
                     <div class="flex flex-wrap gap-1.5">
                         <button
                             v-for="m in paymentMethods"
@@ -684,7 +707,7 @@ const paymentMethods = [
 
                     <!-- Cash received -->
                     <div v-if="cart.paymentMethod === 'cash' && cart.items.length > 0" class="mt-2 flex items-center gap-2">
-                        <span class="text-xs text-muted-foreground">Received:</span>
+                        <span class="text-xs text-muted-foreground">{{ t('pos.received') }}</span>
                         <input
                             v-model.number="cart.cashReceived"
                             type="number"
@@ -698,10 +721,10 @@ const paymentMethods = [
 
                     <p v-if="cart.paymentMethod === 'udhaar' && !cart.selectedCustomer" class="mt-2 flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
                         <AlertTriangle class="h-3.5 w-3.5" />
-                        Select a customer for credit sale
+                        {{ t('pos.udhaarWarning') }}
                     </p>
                     <p v-if="cart.paymentMethod === 'udhaar' && cart.selectedCustomer" class="mt-2 text-xs text-amber-600 dark:text-amber-400">
-                        Added to <span class="font-semibold">{{ cart.selectedCustomer.name }}</span>'s udhaar
+                        {{ t('pos.udhaarAdded', { name: cart.selectedCustomer!.name }) }}
                     </p>
                 </div>
 
@@ -716,8 +739,8 @@ const paymentMethods = [
                             : 'cursor-not-allowed bg-muted text-muted-foreground',
                     ]"
                 >
-                    {{ cart.chargeButtonLabel }}
-                    <span v-if="cart.items.length > 0" class="ml-2 text-xs opacity-50">(F12)</span>
+                    {{ displayChargeLabel }}
+                    <span v-if="cart.items.length > 0" class="ms-2 text-xs opacity-50">(F12)</span>
                 </button>
             </div>
         </div>
@@ -733,7 +756,7 @@ const paymentMethods = [
                     <div class="mb-4 flex items-center justify-between">
                         <h2 class="flex items-center gap-2 text-base font-bold text-foreground">
                             <UserPlus class="h-4 w-4 text-primary" />
-                            Add New Customer
+                            {{ t('pos.addNewCustomer') }}
                         </h2>
                         <button @click="showAddCustomer = false" class="text-muted-foreground hover:text-foreground transition-colors">
                             <X class="h-5 w-5" />
@@ -746,30 +769,30 @@ const paymentMethods = [
 
                     <div class="space-y-3">
                         <div>
-                            <label class="mb-1 block text-xs font-medium text-muted-foreground">Name <span class="text-destructive">*</span></label>
+                            <label class="mb-1 block text-xs font-medium text-muted-foreground">{{ t('common.name') }} <span class="text-destructive">*</span></label>
                             <input
                                 v-model="newCustomer.name"
                                 type="text"
-                                placeholder="Customer name"
+                                :placeholder="t('pos.addCustomerNamePh')"
                                 class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
                                 @keydown.enter="saveNewCustomer"
                             />
                         </div>
                         <div>
-                            <label class="mb-1 block text-xs font-medium text-muted-foreground">Phone <span class="text-destructive">*</span></label>
+                            <label class="mb-1 block text-xs font-medium text-muted-foreground">{{ t('common.phone') }} <span class="text-destructive">*</span></label>
                             <input
                                 v-model="newCustomer.phone"
                                 type="text"
-                                placeholder="03xx-xxxxxxx"
+                                :placeholder="t('customers.phonePlaceholder')"
                                 class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
                             />
                         </div>
                         <div>
-                            <label class="mb-1 block text-xs font-medium text-muted-foreground">Address <span class="text-muted-foreground/60 text-[11px]">(optional)</span></label>
+                            <label class="mb-1 block text-xs font-medium text-muted-foreground">{{ t('pos.addCustomerAddressOptional') }}</label>
                             <input
                                 v-model="newCustomer.address"
                                 type="text"
-                                placeholder="Street / area"
+                                :placeholder="t('pos.addCustomerAddressPh')"
                                 class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
                             />
                         </div>
@@ -779,13 +802,13 @@ const paymentMethods = [
                         <button
                             @click="showAddCustomer = false"
                             class="flex-1 rounded-xl border border-border py-2.5 text-sm text-muted-foreground hover:border-foreground/30 hover:text-foreground transition-colors"
-                        >Cancel</button>
+                        >{{ t('common.cancel') }}</button>
                         <button
                             @click="saveNewCustomer"
                             :disabled="addingCustomer"
                             class="flex-1 rounded-xl bg-primary py-2.5 text-sm font-bold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-60"
                         >
-                            {{ addingCustomer ? 'Saving…' : 'Save & Select' }}
+                            {{ addingCustomer ? t('common.saving') : t('pos.saveSelect') }}
                         </button>
                     </div>
                 </div>
@@ -801,7 +824,7 @@ const paymentMethods = [
             >
                 <div class="w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-2xl">
                     <div class="mb-5 flex items-center justify-between">
-                        <h2 class="text-lg font-bold text-foreground">Confirm Payment</h2>
+                        <h2 class="text-lg font-bold text-foreground">{{ t('pos.confirmPayment') }}</h2>
                         <button @click="cart.showPaymentModal = false" class="text-muted-foreground hover:text-foreground">
                             <X class="h-5 w-5" />
                         </button>
@@ -814,36 +837,36 @@ const paymentMethods = [
 
                     <div class="max-h-40 space-y-1.5 overflow-y-auto text-sm">
                         <div v-for="item in cart.items" :key="item.product_id" class="flex justify-between text-muted-foreground">
-                            <span class="mr-4 truncate">{{ item.name }} × {{ item.quantity }}</span>
+                            <span class="me-4 truncate">{{ item.name }} × {{ item.quantity }}</span>
                             <span class="shrink-0 font-medium text-foreground">{{ fmt((item.unit_price * item.quantity) - item.discount) }}</span>
                         </div>
                     </div>
 
                     <div class="mt-3 border-t border-border pt-3 text-sm">
                         <div v-if="cart.cartDiscount > 0" class="flex justify-between text-green-600 dark:text-green-400">
-                            <span>Discount</span><span>−{{ fmt(cart.cartDiscount) }}</span>
+                            <span>{{ t('common.discount') }}</span><span>−{{ fmt(cart.cartDiscount) }}</span>
                         </div>
                         <div class="mt-1 flex justify-between">
-                            <span class="font-bold text-foreground">Total</span>
+                            <span class="font-bold text-foreground">{{ t('common.total') }}</span>
                             <span class="text-2xl font-black text-primary">{{ fmt(cart.total) }}</span>
                         </div>
                     </div>
 
                     <div class="mt-4 rounded-xl bg-muted/60 px-4 py-3 text-sm">
                         <div class="flex justify-between text-muted-foreground">
-                            <span>Method</span>
+                            <span>{{ t('common.method') }}</span>
                             <span class="capitalize font-medium text-foreground">{{ cart.paymentMethod }}</span>
                         </div>
                         <div v-if="cart.paymentMethod === 'cash'" class="mt-1 flex justify-between text-muted-foreground">
-                            <span>Change</span>
+                            <span>{{ t('pos.change') }}</span>
                             <span class="font-bold text-green-600 dark:text-green-400">{{ fmt(cart.changeAmount) }}</span>
                         </div>
                         <div v-if="cart.udhaarAmount > 0" class="mt-1 flex justify-between text-muted-foreground">
-                            <span>Udhaar</span>
+                            <span>{{ t('common.udhaar') }}</span>
                             <span class="font-bold text-amber-600 dark:text-amber-400">{{ fmt(cart.udhaarAmount) }}</span>
                         </div>
                         <div v-if="cart.selectedCustomer" class="mt-1 flex justify-between text-muted-foreground">
-                            <span>Customer</span>
+                            <span>{{ t('pos.customerWord') }}</span>
                             <span class="font-medium text-foreground">{{ cart.selectedCustomer.name }}</span>
                         </div>
                     </div>
@@ -853,7 +876,7 @@ const paymentMethods = [
                         :disabled="cart.isProcessing"
                         class="mt-5 w-full rounded-xl bg-primary py-3.5 text-sm font-bold text-primary-foreground hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-60"
                     >
-                        {{ cart.isProcessing ? 'Processing…' : `Confirm & Charge ${fmt(cart.total)}` }}
+                        {{ cart.isProcessing ? t('pos.processing') : t('pos.confirmCharge', { amount: fmt(cart.total) }) }}
                     </button>
                 </div>
             </div>

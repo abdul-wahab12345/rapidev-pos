@@ -24,11 +24,14 @@ import {
     X,
 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
+import { useI18n } from 'vue-i18n';
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Inventory', href: '/inventory/products' },
-    { title: 'Stock Management', href: '/inventory/stock' },
-];
+const { t, locale } = useI18n();
+
+const breadcrumbs = computed<BreadcrumbItem[]>(() => [
+    { title: t('nav.inventory'), href: route('inventory.products.index') },
+    { title: t('nav.stockManagement'), href: route('inventory.stock.index') },
+]);
 
 interface Category { name: string; color: string }
 interface Variant   { id: string; label: string }
@@ -154,58 +157,79 @@ const previewQty = computed(() => {
 
 // ── Formatting ──────────────────────────────────────────
 function fmtDate(d: string) {
-    return new Date(d).toLocaleString('en-PK', {
-        day: '2-digit', month: 'short', year: 'numeric',
-        hour: '2-digit', minute: '2-digit',
+    const loc = locale.value === 'ur' ? 'ur-PK' : 'en-PK';
+    return new Date(d).toLocaleString(loc, {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
     });
 }
 
-const reasonLabel: Record<string, string> = {
-    purchase:   'Purchase / Restock',
-    damage:     'Damage / Write-off',
-    theft:      'Theft / Loss',
-    correction: 'Stock Correction',
-    return:     'Customer Return',
-    other:      'Other',
-};
+const reasonLabel = computed<Record<string, string>>(() => ({
+    purchase: t('inventory.adjustReasonPurchase'),
+    damage: t('inventory.adjustReasonDamage'),
+    theft: t('inventory.adjustReasonTheft'),
+    correction: t('inventory.adjustReasonCorrection'),
+    return: t('inventory.adjustReasonReturn'),
+    other: t('inventory.adjustReasonOther'),
+}));
+
+const stockHistoryTabs = computed(() => [
+    { id: 'stock' as const, label: t('inventory.stockLevels'), icon: ClipboardList },
+    { id: 'history' as const, label: t('inventory.recentAdjustments'), icon: History },
+]);
+
+const adjustTypeButtons = computed(() => [
+    { id: 'add' as const, label: t('inventory.addQty'), icon: ArrowUpCircle },
+    { id: 'remove' as const, label: t('inventory.removeQty'), icon: ArrowDownCircle },
+    { id: 'set' as const, label: t('inventory.setTo'), icon: Package },
+]);
+
+const qtyAdjustPlaceholder = computed(() => {
+    if (form.type === 'set') return t('inventory.placeholderNewStockLevel');
+    if (form.type === 'add') return t('inventory.placeholderQtyToAdd');
+    return t('inventory.placeholderQtyToRemove');
+});
 </script>
 
 <template>
-    <Head title="Stock Management" />
+    <Head :title="t('inventory.stockManagementTitle')" />
     <AppLayout :breadcrumbs="breadcrumbs">
 
         <!-- Header -->
         <div class="flex items-center justify-between px-4 py-4 sm:px-6">
             <div>
-                <h1 class="text-2xl font-bold text-foreground">Stock Management</h1>
-                <p class="text-sm text-muted-foreground">Track inventory levels and log adjustments</p>
+                <h1 class="text-2xl font-bold text-foreground">{{ t('inventory.stockManagementTitle') }}</h1>
+                <p class="text-sm text-muted-foreground">{{ t('inventory.stockManagementDescription') }}</p>
             </div>
         </div>
 
         <!-- Stats -->
         <div class="grid grid-cols-2 gap-3 px-4 sm:grid-cols-4 sm:px-6">
-            <StatCard label="Total Products" :value="stats.total_products" :icon="Package" />
-            <StatCard label="Total Items"    :value="stats.total_items.toLocaleString()" :icon="Layers" />
-            <StatCard label="Low Stock"      :value="stats.low_stock"    :icon="AlertTriangle" tone="warning" />
-            <StatCard label="Out of Stock"   :value="stats.out_of_stock" :icon="PackageX"      tone="danger" />
+            <StatCard :label="t('inventory.totalProducts')" :value="stats.total_products" :icon="Package" />
+            <StatCard :label="t('inventory.totalItems')" :value="stats.total_items.toLocaleString()" :icon="Layers" />
+            <StatCard :label="t('inventory.lowStock')" :value="stats.low_stock" :icon="AlertTriangle" tone="warning" />
+            <StatCard :label="t('inventory.outOfStock')" :value="stats.out_of_stock" :icon="PackageX" tone="danger" />
         </div>
 
         <!-- Tabs -->
         <div class="mt-4 border-b border-border px-4 sm:px-6">
             <div class="flex gap-1">
                 <button
-                    v-for="t in [{ id: 'stock', label: 'Stock Levels', icon: ClipboardList }, { id: 'history', label: 'Recent Adjustments', icon: History }]"
-                    :key="t.id"
-                    @click="tab = t.id as 'stock' | 'history'"
+                    v-for="tabItem in stockHistoryTabs"
+                    :key="tabItem.id"
+                    @click="tab = tabItem.id"
                     :class="[
                         'flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors',
-                        tab === t.id
+                        tab === tabItem.id
                             ? 'border-primary text-primary'
                             : 'border-transparent text-muted-foreground hover:text-foreground',
                     ]"
                 >
-                    <component :is="t.icon" class="h-4 w-4" />
-                    {{ t.label }}
+                    <component :is="tabItem.icon" class="h-4 w-4" />
+                    {{ tabItem.label }}
                 </button>
             </div>
         </div>
@@ -216,61 +240,61 @@ const reasonLabel: Record<string, string> = {
             <!-- Filters -->
             <div class="flex flex-wrap items-center gap-2">
                 <div class="relative flex-1 min-w-48">
-                    <Search class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input v-model="search" placeholder="Search product, SKU, barcode…" class="pl-9" />
+                    <Search class="absolute start-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input v-model="search" :placeholder="t('inventory.stockSearchPlaceholder')" class="ps-9" />
                 </div>
 
                 <Select v-model="category">
                     <SelectTrigger class="w-44">
-                        <SelectValue placeholder="All Categories" />
+                        <SelectValue :placeholder="t('inventory.allCategories')" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="_all_">All Categories</SelectItem>
+                        <SelectItem value="_all_">{{ t('inventory.allCategories') }}</SelectItem>
                         <SelectItem v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</SelectItem>
                     </SelectContent>
                 </Select>
 
                 <Select v-model="stockF">
                     <SelectTrigger class="w-40">
-                        <SelectValue placeholder="All Stock" />
+                        <SelectValue :placeholder="t('inventory.allStock')" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="_all_">All Stock</SelectItem>
-                        <SelectItem value="low">Low Stock</SelectItem>
-                        <SelectItem value="out">Out of Stock</SelectItem>
+                        <SelectItem value="_all_">{{ t('inventory.allStock') }}</SelectItem>
+                        <SelectItem value="low">{{ t('inventory.lowStock') }}</SelectItem>
+                        <SelectItem value="out">{{ t('inventory.outOfStock') }}</SelectItem>
                     </SelectContent>
                 </Select>
 
                 <Button v-if="hasFilters" variant="ghost" size="sm" @click="clearFilters" class="gap-1">
-                    <X class="h-3.5 w-3.5" /> Clear
+                    <X class="h-3.5 w-3.5" /> {{ t('common.clear') }}
                 </Button>
             </div>
 
             <!-- Table -->
             <div class="rounded-xl border border-border bg-card overflow-hidden">
                 <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
+                    <table class="w-full border-collapse text-sm min-w-[720px]">
                         <thead class="border-b border-border bg-muted/40">
-                            <tr>
-                                <th class="px-4 py-3 text-left font-medium text-muted-foreground">Product</th>
-                                <th class="px-4 py-3 text-left font-medium text-muted-foreground">Category</th>
-                                <th class="px-4 py-3 text-left font-medium text-muted-foreground">SKU</th>
-                                <th class="px-4 py-3 text-center font-medium text-muted-foreground">Stock</th>
-                                <th class="px-4 py-3 text-center font-medium text-muted-foreground">Reorder At</th>
-                                <th class="px-4 py-3 text-center font-medium text-muted-foreground">Status</th>
-                                <th class="px-4 py-3 text-right font-medium text-muted-foreground">Actions</th>
+                            <tr class="[&>th]:align-middle">
+                                <th class="px-4 py-3 text-start font-medium text-muted-foreground">{{ t('inventory.product') }}</th>
+                                <th class="px-4 py-3 text-start font-medium text-muted-foreground">{{ t('inventory.category') }}</th>
+                                <th class="px-4 py-3 text-start font-medium text-muted-foreground">{{ t('inventory.sku') }}</th>
+                                <th class="px-4 py-3 text-center font-medium text-muted-foreground">{{ t('inventory.stock') }}</th>
+                                <th class="px-4 py-3 text-center font-medium text-muted-foreground">{{ t('inventory.reorderAt') }}</th>
+                                <th class="px-4 py-3 text-center font-medium text-muted-foreground">{{ t('common.status') }}</th>
+                                <th class="px-4 py-3 text-end font-medium text-muted-foreground">{{ t('common.actions') }}</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-border">
                             <tr v-if="stock.data.length === 0">
                                 <td colspan="7" class="px-4 py-12 text-center text-muted-foreground">
-                                    No stock records found. Add products first, then stock will appear here.
+                                    {{ t('inventory.stockEmptyExtended') }}
                                 </td>
                             </tr>
                             <tr
                                 v-for="row in stock.data"
                                 :key="row.id"
-                                class="hover:bg-muted/30 transition-colors"
+                                class="hover:bg-muted/30 transition-colors [&>td]:align-middle"
                             >
                                 <td class="px-4 py-3">
                                     <div class="font-medium text-foreground">{{ row.product.name }}</div>
@@ -291,15 +315,15 @@ const reasonLabel: Record<string, string> = {
                                 <td class="px-4 py-3 text-center">
                                     <StockBadge :quantity="row.quantity" :reorder-level="row.reorder_level" />
                                 </td>
-                                <td class="px-4 py-3 text-right">
+                                <td class="px-4 py-3 text-end">
                                     <Button
                                         variant="outline"
                                         size="sm"
                                         @click="openAdjust(row)"
-                                        class="gap-1.5 text-xs"
+                                        class="gap-1.5 text-xs rtl:flex-row-reverse"
                                     >
                                         <Settings2 class="h-3.5 w-3.5" />
-                                        Adjust
+                                        {{ t('inventory.adjust') }}
                                     </Button>
                                 </td>
                             </tr>
@@ -310,7 +334,7 @@ const reasonLabel: Record<string, string> = {
                 <!-- Pagination -->
                 <div v-if="stock.last_page > 1" class="flex items-center justify-between border-t border-border px-4 py-3">
                     <p class="text-sm text-muted-foreground">
-                        Showing {{ stock.data.length }} of {{ stock.total }} records
+                        {{ t('inventory.paginationRecordsPartial', { shown: stock.data.length, total: stock.total }) }}
                     </p>
                     <div class="flex gap-1">
                         <Button
@@ -332,28 +356,28 @@ const reasonLabel: Record<string, string> = {
         <div v-else class="px-4 py-4 sm:px-6">
             <div class="rounded-xl border border-border bg-card overflow-hidden">
                 <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
+                    <table class="w-full border-collapse text-sm">
                         <thead class="border-b border-border bg-muted/40">
-                            <tr>
-                                <th class="px-4 py-3 text-left font-medium text-muted-foreground">Product</th>
-                                <th class="px-4 py-3 text-center font-medium text-muted-foreground">Before</th>
-                                <th class="px-4 py-3 text-center font-medium text-muted-foreground">Change</th>
-                                <th class="px-4 py-3 text-center font-medium text-muted-foreground">After</th>
-                                <th class="px-4 py-3 text-left font-medium text-muted-foreground">Reason</th>
-                                <th class="px-4 py-3 text-left font-medium text-muted-foreground">By</th>
-                                <th class="px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
+                            <tr class="[&>th]:align-middle">
+                                <th class="px-4 py-3 text-start font-medium text-muted-foreground">{{ t('inventory.product') }}</th>
+                                <th class="px-4 py-3 text-center font-medium text-muted-foreground">{{ t('inventory.before') }}</th>
+                                <th class="px-4 py-3 text-center font-medium text-muted-foreground">{{ t('inventory.change') }}</th>
+                                <th class="px-4 py-3 text-center font-medium text-muted-foreground">{{ t('inventory.after') }}</th>
+                                <th class="px-4 py-3 text-start font-medium text-muted-foreground">{{ t('common.reason') }}</th>
+                                <th class="px-4 py-3 text-start font-medium text-muted-foreground">{{ t('common.by') }}</th>
+                                <th class="px-4 py-3 text-start font-medium text-muted-foreground">{{ t('common.date') }}</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-border">
                             <tr v-if="recent_adjustments.length === 0">
                                 <td colspan="7" class="px-4 py-12 text-center text-muted-foreground">
-                                    No adjustments yet.
+                                    {{ t('inventory.noAdjustmentsYet') }}
                                 </td>
                             </tr>
                             <tr
                                 v-for="adj in recent_adjustments"
                                 :key="adj.id"
-                                class="hover:bg-muted/30 transition-colors"
+                                class="hover:bg-muted/30 transition-colors [&>td]:align-middle"
                             >
                                 <td class="px-4 py-3">
                                     <div class="font-medium text-foreground">{{ adj.product_name }}</div>
@@ -389,7 +413,7 @@ const reasonLabel: Record<string, string> = {
             <DialogHeader>
                 <DialogTitle class="flex items-center gap-2">
                     <Settings2 class="h-5 w-5" />
-                    Adjust Stock
+                    {{ t('inventory.adjustStock') }}
                 </DialogTitle>
             </DialogHeader>
 
@@ -400,7 +424,7 @@ const reasonLabel: Record<string, string> = {
                     <p class="font-semibold text-foreground">{{ adjustRow.product.name }}</p>
                     <p v-if="adjustRow.variant" class="text-xs text-muted-foreground">{{ adjustRow.variant.label }}</p>
                     <p class="mt-1 text-sm text-muted-foreground">
-                        Current stock: <strong class="text-foreground">{{ adjustRow.quantity }}</strong>
+                        {{ t('inventory.currentStock') }}: <strong class="text-foreground">{{ adjustRow.quantity }}</strong>
                         {{ adjustRow.product.unit }}
                     </p>
                 </div>
@@ -408,42 +432,42 @@ const reasonLabel: Record<string, string> = {
                 <!-- Type -->
                 <div class="grid grid-cols-3 gap-2">
                     <button
-                        v-for="t in [{ id: 'add', label: 'Add', icon: ArrowUpCircle }, { id: 'remove', label: 'Remove', icon: ArrowDownCircle }, { id: 'set', label: 'Set to', icon: Package }]"
-                        :key="t.id"
-                        @click="form.type = t.id as 'add' | 'remove' | 'set'"
+                        v-for="btn in adjustTypeButtons"
+                        :key="btn.id"
+                        @click="form.type = btn.id"
                         :class="[
                             'flex flex-col items-center gap-1 rounded-lg border py-3 text-xs font-medium transition-colors',
-                            form.type === t.id
+                            form.type === btn.id
                                 ? 'border-primary bg-primary/10 text-primary'
                                 : 'border-border text-muted-foreground hover:bg-muted',
                         ]"
                     >
-                        <component :is="t.icon" class="h-4 w-4" />
-                        {{ t.label }}
+                        <component :is="btn.icon" class="h-4 w-4" />
+                        {{ btn.label }}
                     </button>
                 </div>
 
                 <!-- Quantity -->
                 <div class="space-y-1.5">
-                    <Label>Quantity</Label>
+                    <Label>{{ t('common.quantity') }}</Label>
                     <Input
                         v-model.number="form.quantity"
                         type="number"
                         min="0"
-                        :placeholder="form.type === 'set' ? 'New stock level' : 'Quantity to ' + form.type"
+                        :placeholder="qtyAdjustPlaceholder"
                     />
                     <p v-if="previewQty !== null" class="text-xs text-muted-foreground">
-                        Stock after adjustment: <strong class="text-foreground">{{ previewQty }}</strong>
+                        {{ t('inventory.stockAfterAdjustment') }}: <strong class="text-foreground">{{ previewQty }}</strong>
                     </p>
                     <p v-if="form.errors.quantity" class="text-xs text-destructive">{{ form.errors.quantity }}</p>
                 </div>
 
                 <!-- Reason -->
                 <div class="space-y-1.5">
-                    <Label>Reason</Label>
+                    <Label>{{ t('common.reason') }}</Label>
                     <Select v-model="form.reason">
                         <SelectTrigger>
-                            <SelectValue placeholder="Select reason" />
+                            <SelectValue :placeholder="t('inventory.selectReasonPlaceholder')" />
                         </SelectTrigger>
                         <SelectContent>
                             <SelectItem v-for="(label, key) in reasonLabel" :key="key" :value="key">{{ label }}</SelectItem>
@@ -454,15 +478,15 @@ const reasonLabel: Record<string, string> = {
 
                 <!-- Notes -->
                 <div class="space-y-1.5">
-                    <Label>Notes <span class="text-muted-foreground">(optional)</span></Label>
-                    <Input v-model="form.notes" placeholder="Any additional details…" />
+                    <Label>{{ t('common.notesOptional') }}</Label>
+                    <Input v-model="form.notes" :placeholder="t('inventory.anyAdditionalDetails')" />
                 </div>
             </div>
 
             <DialogFooter>
-                <Button variant="outline" @click="showAdjust = false">Cancel</Button>
+                <Button variant="outline" @click="showAdjust = false">{{ t('common.cancel') }}</Button>
                 <Button @click="submitAdjust" :disabled="form.processing">
-                    {{ form.processing ? 'Saving…' : 'Save Adjustment' }}
+                    {{ form.processing ? t('common.saving') : t('inventory.saveAdjustment') }}
                 </Button>
             </DialogFooter>
         </DialogContent>

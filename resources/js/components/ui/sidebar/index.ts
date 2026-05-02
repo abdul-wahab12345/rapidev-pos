@@ -27,7 +27,19 @@ export { default as SidebarTrigger } from './SidebarTrigger.vue';
 export { useSidebar } from './utils';
 
 export const sidebarMenuButtonVariants = cva(
-    'peer/menu-button flex w-full items-center gap-2 overflow-hidden rounded-md p-2 text-left text-sm outline-none ring-sidebar-ring transition-[width,height,padding] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:!p-2 [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0',
+    [
+        'peer/menu-button flex w-full min-h-0 items-start gap-2 rounded-md px-2 py-2.5 text-start text-sm outline-none ring-sidebar-ring transition-[width,height,padding]',
+        'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground',
+        'disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50',
+        'group-has-[[data-sidebar=menu-action]]/menu-item:pe-8',
+        'data-[active=true]:bg-sidebar-accent data-[active=true]:font-medium data-[active=true]:text-sidebar-accent-foreground data-[state=open]:hover:bg-sidebar-accent data-[state=open]:hover:text-sidebar-accent-foreground',
+        'group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:!items-center group-data-[collapsible=icon]:!justify-center group-data-[collapsible=icon]:!p-2 group-data-[collapsible=icon]:!overflow-hidden',
+        '[&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:self-center',
+        '[&_[data-sidebar-nav-title]]:min-w-0 [&_[data-sidebar-nav-title]]:flex-1 [&_[data-sidebar-nav-title]]:break-words [&_[data-sidebar-nav-title]]:leading-snug',
+        '[&>[data-slot=sidebar-badge]]:shrink-0',
+        /* Allow tall scripts (Urdu); overflow-x avoids horizontal bleed from rounded clipping */
+        'overflow-x-clip overflow-y-visible',
+    ].join(' '),
     {
         variants: {
             variant: {
@@ -36,9 +48,9 @@ export const sidebarMenuButtonVariants = cva(
                     'bg-background shadow-[0_0_0_1px_hsl(var(--sidebar-border))] hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:shadow-[0_0_0_1px_hsl(var(--sidebar-accent))]',
             },
             size: {
-                default: 'h-8 text-sm',
-                sm: 'h-7 text-xs',
-                lg: 'h-12 text-sm group-data-[collapsible=icon]:!p-0',
+                default: 'min-h-11 text-sm',
+                sm: 'min-h-10 text-xs py-2',
+                lg: 'min-h-14 text-sm py-3.5 group-data-[collapsible=icon]:!p-0',
             },
         },
         defaultVariants: {

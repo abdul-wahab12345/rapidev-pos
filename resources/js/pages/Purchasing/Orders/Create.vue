@@ -4,14 +4,17 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
-import { Head, router, useForm } from '@inertiajs/vue3';
+import { Head, useForm } from '@inertiajs/vue3';
 import { Minus, Plus, ShoppingCart, Trash2 } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Purchasing', href: '/purchasing/orders' },
-    { title: 'New Purchase Order', href: '/purchasing/orders/create' },
-];
+const { t } = useI18n();
+
+const breadcrumbs = computed<BreadcrumbItem[]>(() => [
+    { title: t('nav.purchasing'), href: route('purchasing.orders.index') },
+    { title: t('purchasing.newPoTitle'), href: route('purchasing.orders.create') },
+]);
 
 interface Variant { id: string; label: string; cost_price: number }
 interface Product {
@@ -38,7 +41,6 @@ interface CartLine {
 
 const lines = ref<CartLine[]>([]);
 const productSearch = ref('');
-const selectedProductId = ref('');
 
 const form = useForm<{
     supplier_id: string;
@@ -99,122 +101,116 @@ function fmt(n: number) {
 
 function submit() {
     if (!lines.value.length) {
-        alert('Add at least one product.');
+        alert(t('purchasing.addOneProductAlert'));
         return;
     }
     form.items = lines.value;
-    form.post('/purchasing/orders');
+    form.post(route('purchasing.orders.store'));
 }
 </script>
 
 <template>
-    <Head title="New Purchase Order" />
+    <Head :title="t('purchasing.newPoTitle')" />
     <AppLayout :breadcrumbs="breadcrumbs">
         <div class="flex flex-col gap-6 p-6 max-w-5xl mx-auto">
 
             <div>
-                <h1 class="text-2xl font-bold tracking-tight">New Purchase Order</h1>
-                <p class="text-muted-foreground text-sm mt-1">Select a supplier, add products, and submit</p>
+                <h1 class="text-2xl font-bold tracking-tight">{{ t('purchasing.newPoTitle') }}</h1>
+                <p class="text-muted-foreground text-sm mt-1">{{ t('purchasing.newPoDescription') }}</p>
             </div>
 
             <form @submit.prevent="submit" class="grid grid-cols-1 gap-6 lg:grid-cols-3">
 
-                <!-- Left: PO Details -->
                 <div class="lg:col-span-1 flex flex-col gap-4">
                     <div class="border rounded-xl p-4 flex flex-col gap-4">
-                        <h2 class="font-semibold text-sm">Order Details</h2>
+                        <h2 class="font-semibold text-sm">{{ t('purchasing.orderDetails') }}</h2>
 
                         <div>
-                            <Label>Supplier *</Label>
+                            <Label>{{ t('purchasing.supplier') }} <span class="text-destructive">*</span></Label>
                             <select v-model="form.supplier_id" required
                                 class="border-input bg-background text-foreground mt-1 w-full rounded-md border px-3 py-2 text-sm">
-                                <option value="">-- Select Supplier --</option>
+                                <option value="">{{ t('purchasing.selectSupplier') }}</option>
                                 <option v-for="s in suppliers" :key="s.id" :value="s.id">{{ s.name }}</option>
                             </select>
                             <p v-if="form.errors.supplier_id" class="text-destructive text-xs mt-1">{{ form.errors.supplier_id }}</p>
                         </div>
 
                         <div>
-                            <Label>Order Date *</Label>
+                            <Label>{{ t('purchasing.orderDate') }} <span class="text-destructive">*</span></Label>
                             <Input v-model="form.order_date" type="date" required class="mt-1" />
                         </div>
 
                         <div>
-                            <Label>Expected Delivery</Label>
+                            <Label>{{ t('purchasing.expectedDelivery') }}</Label>
                             <Input v-model="form.expected_date" type="date" class="mt-1" />
                         </div>
 
                         <div>
-                            <Label>Payment Method</Label>
+                            <Label>{{ t('common.paymentMethod') }}</Label>
                             <select v-model="form.payment_method"
                                 class="border-input bg-background text-foreground mt-1 w-full rounded-md border px-3 py-2 text-sm">
-                                <option value="credit">Credit (AP)</option>
-                                <option value="cash">Cash on Delivery</option>
-                                <option value="bank">Bank Transfer</option>
+                                <option value="credit">{{ t('purchasing.creditAp') }}</option>
+                                <option value="cash">{{ t('purchasing.cod') }}</option>
+                                <option value="bank">{{ t('purchasing.bankTransfer') }}</option>
                             </select>
                         </div>
 
                         <div>
-                            <Label>Notes</Label>
-                            <Input v-model="form.notes" class="mt-1" placeholder="Optional" />
+                            <Label>{{ t('common.notes') }}</Label>
+                            <Input v-model="form.notes" class="mt-1" :placeholder="t('common.optionalHint')" />
                         </div>
 
-                        <!-- Mark as received on creation -->
-                        <label class="flex items-start gap-3 cursor-pointer rounded-lg border p-3 transition-colors"
+                        <label class="flex items-start gap-3 cursor-pointer rounded-lg border p-3 transition-colors rtl:flex-row-reverse"
                                :class="form.mark_received ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-border hover:bg-muted/30'">
                             <input type="checkbox" v-model="form.mark_received" class="mt-0.5 accent-emerald-600" />
                             <div>
-                                <p class="text-sm font-medium text-foreground">Stock already received</p>
+                                <p class="text-sm font-medium text-foreground">{{ t('purchasing.stockReceived') }}</p>
                                 <p class="text-xs text-muted-foreground mt-0.5">
-                                    Mark all items as fully received immediately — stock and accounting will be updated on save.
+                                    {{ t('purchasing.stockReceivedHelpDetail') }}
                                 </p>
                             </div>
                         </label>
                     </div>
 
-                    <!-- Summary -->
                     <div class="border rounded-xl p-4 flex flex-col gap-3">
-                        <h2 class="font-semibold text-sm">Summary</h2>
+                        <h2 class="font-semibold text-sm">{{ t('common.summary') }}</h2>
                         <div class="flex justify-between text-sm">
-                            <span class="text-muted-foreground">Items</span>
+                            <span class="text-muted-foreground">{{ t('common.items') }}</span>
                             <span>{{ lines.length }}</span>
                         </div>
                         <div class="flex justify-between text-sm">
-                            <span class="text-muted-foreground">Subtotal</span>
+                            <span class="text-muted-foreground">{{ t('common.subtotal') }}</span>
                             <span>{{ fmt(subtotal) }}</span>
                         </div>
                         <div class="border-t pt-2 flex justify-between font-bold">
-                            <span>Total</span>
+                            <span>{{ t('common.total') }}</span>
                             <span>{{ fmt(subtotal) }}</span>
                         </div>
                         <Button
                             type="submit"
                             :disabled="form.processing || !lines.length"
-                            class="w-full mt-1 gap-2"
+                            class="w-full mt-1 gap-2 rtl:flex-row-reverse"
                             :class="form.mark_received ? 'bg-emerald-600 hover:bg-emerald-500' : ''"
                         >
                             <ShoppingCart :size="16" />
-                            {{ form.mark_received ? 'Create & Mark Received' : 'Create Purchase Order' }}
+                            {{ form.mark_received ? t('purchasing.createReceived') : t('purchasing.createPo') }}
                         </Button>
                     </div>
                 </div>
 
-                <!-- Right: Products -->
                 <div class="lg:col-span-2 flex flex-col gap-4">
 
-                    <!-- Product Search -->
                     <div class="border rounded-xl p-4 flex flex-col gap-3">
-                        <h2 class="font-semibold text-sm">Add Products</h2>
-                        <Input v-model="productSearch" placeholder="Search products by name or SKU…" />
+                        <h2 class="font-semibold text-sm">{{ t('purchasing.addProducts') }}</h2>
+                        <Input v-model="productSearch" :placeholder="t('purchasing.searchProductsPoPlaceholder')" />
                         <div v-if="productSearch" class="max-h-60 overflow-y-auto divide-y border rounded-lg">
                             <div v-if="filteredProducts.length === 0"
                                 class="text-muted-foreground text-sm py-4 text-center">
-                                No products found
+                                {{ t('purchasing.noProductsSearchResults') }}
                             </div>
                             <template v-for="p in filteredProducts" :key="p.id">
-                                <!-- Product without variants -->
                                 <div v-if="!p.has_variants"
-                                    class="flex items-center justify-between px-3 py-2 hover:bg-muted/40 cursor-pointer"
+                                    class="flex items-center justify-between px-3 py-2 hover:bg-muted/40 cursor-pointer rtl:flex-row-reverse"
                                     @click="addProduct(p)">
                                     <div>
                                         <div class="text-sm font-medium">{{ p.name }}</div>
@@ -223,7 +219,6 @@ function submit() {
                                     </div>
                                     <span class="text-xs text-muted-foreground">{{ fmt(p.cost_price) }}</span>
                                 </div>
-                                <!-- Product with variants -->
                                 <div v-else class="px-3 py-2">
                                     <div class="text-sm font-medium">{{ p.name }}</div>
                                     <div v-if="p.name_ur" class="text-xs mb-1" dir="rtl">{{ p.name_ur }}</div>
@@ -240,18 +235,17 @@ function submit() {
                         </div>
                     </div>
 
-                    <!-- Cart Lines -->
                     <div class="border rounded-xl overflow-hidden">
                         <div class="bg-muted/50 px-4 py-2 text-xs font-medium grid grid-cols-12 gap-2">
-                            <div class="col-span-5">Product</div>
-                            <div class="col-span-2 text-center">Qty</div>
-                            <div class="col-span-2 text-right">Unit Cost</div>
-                            <div class="col-span-2 text-right">Total</div>
+                            <div class="col-span-5">{{ t('inventory.product') }}</div>
+                            <div class="col-span-2 text-center">{{ t('common.quantity') }}</div>
+                            <div class="col-span-2 text-end">{{ t('purchasing.unitCost') }}</div>
+                            <div class="col-span-2 text-end">{{ t('common.total') }}</div>
                             <div class="col-span-1"></div>
                         </div>
                         <div v-if="lines.length === 0"
-                            class="text-muted-foreground text-sm py-10 text-center">
-                            No items added yet — search above to add products
+                            class="text-muted-foreground text-sm py-10 text-center px-4">
+                            {{ t('purchasing.cartEmptyCombined') }}
                         </div>
                         <div v-for="(line, i) in lines" :key="i"
                             class="grid grid-cols-12 gap-2 px-4 py-2 items-center border-t text-sm">
@@ -273,14 +267,14 @@ function submit() {
                                     <Plus :size="12" />
                                 </button>
                             </div>
-                            <div class="col-span-2 text-right">
+                            <div class="col-span-2 text-end">
                                 <input v-model.number="line.unit_cost" type="number" min="0" step="0.01"
-                                    class="w-24 text-right border rounded px-1 py-0.5 text-xs bg-background" />
+                                    class="w-24 text-end border rounded px-1 py-0.5 text-xs bg-background" />
                             </div>
-                            <div class="col-span-2 text-right font-medium">
+                            <div class="col-span-2 text-end font-medium">
                                 {{ fmt(line.unit_cost * line.quantity_ordered) }}
                             </div>
-                            <div class="col-span-1 text-right">
+                            <div class="col-span-1 text-end">
                                 <button type="button" @click="removeLine(i)"
                                     class="text-destructive hover:bg-red-500/10 rounded p-1">
                                     <Trash2 :size="14" />

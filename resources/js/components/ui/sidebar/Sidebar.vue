@@ -12,12 +12,15 @@ defineOptions({
 const props = withDefaults(
     defineProps<{
         side?: 'left' | 'right';
+        /** Mobile sheet slide-in edge (physical). When omitted, falls back to `side`. Use `right` under `dir="rtl"` so drawers open from the logical start edge. */
+        sheetSide?: 'left' | 'right';
         variant?: 'sidebar' | 'floating' | 'inset';
         collapsible?: 'offcanvas' | 'icon' | 'none';
         class?: HTMLAttributes['class'];
     }>(),
     {
         side: 'left',
+        sheetSide: undefined,
         variant: 'sidebar',
         collapsible: 'offcanvas',
     },
@@ -39,7 +42,7 @@ const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
         <SheetContent
             data-sidebar="sidebar"
             data-mobile="true"
-            :side="side"
+            :side="props.sheetSide ?? side"
             class="w-[--sidebar-width] bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
             :style="{
                 '--sidebar-width': SIDEBAR_WIDTH_MOBILE,
@@ -75,14 +78,14 @@ const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
         <div
             :class="
                 cn(
-                    'fixed inset-y-0 z-10 hidden h-svh w-[--sidebar-width] transition-[left,right,width] duration-200 ease-linear md:flex',
+                    'fixed inset-y-0 z-10 hidden h-svh w-[--sidebar-width] transition-[width] duration-200 ease-linear md:flex',
                     side === 'left'
-                        ? 'left-0 group-data-[collapsible=offcanvas]:left-[calc(var(--sidebar-width)*-1)]'
-                        : 'right-0 group-data-[collapsible=offcanvas]:right-[calc(var(--sidebar-width)*-1)]',
+                        ? 'start-0 group-data-[collapsible=offcanvas]:start-[calc(var(--sidebar-width)*-1)]'
+                        : 'end-0 group-data-[collapsible=offcanvas]:end-[calc(var(--sidebar-width)*-1)]',
                     // Adjust the padding for floating and inset variants.
                     variant === 'floating' || variant === 'inset'
                         ? 'p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4)_+2px)]'
-                        : 'group-data-[collapsible=icon]:w-[--sidebar-width-icon] group-data-[side=left]:border-r group-data-[side=right]:border-l',
+                        : 'group-data-[collapsible=icon]:w-[--sidebar-width-icon] group-data-[side=left]:border-e group-data-[side=right]:border-s',
                     props.class,
                 )
             "

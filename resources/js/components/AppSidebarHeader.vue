@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import LanguageSwitcher from '@/components/LanguageSwitcher.vue';
+import ThemeSwitcher from '@/components/ThemeSwitcher.vue';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from '@/components/ui/breadcrumb';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import type { BreadcrumbItemType } from '@/types';
@@ -10,10 +12,10 @@ defineProps<{
 
 <template>
     <header
-        class="flex h-16 shrink-0 items-center gap-2 border-b border-sidebar-border/70 px-6 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12 md:px-4"
+        class="flex h-16 shrink-0 items-center gap-3 border-b border-sidebar-border/70 px-6 transition-[width,height] ease-linear group-has-[[data-collapsible=icon]]/sidebar-wrapper:h-12 md:px-4"
     >
-        <div class="flex items-center gap-2">
-            <SidebarTrigger class="-ml-1" />
+        <div class="flex min-w-0 flex-1 items-center gap-2">
+            <SidebarTrigger class="-ms-1 shrink-0" />
             <template v-if="breadcrumbs.length > 0">
                 <Breadcrumb>
                     <BreadcrumbList>
@@ -33,6 +35,11 @@ defineProps<{
                     </BreadcrumbList>
                 </Breadcrumb>
             </template>
+        </div>
+
+        <div class="flex shrink-0 items-center gap-2">
+            <ThemeSwitcher />
+            <LanguageSwitcher />
         </div>
     </header>
 </template>

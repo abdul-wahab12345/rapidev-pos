@@ -41,6 +41,10 @@ class HandleInertiaRequests extends Middleware
         $user = $request->user();
         $tenant = $user?->tenant;
 
+        if ($tenant) {
+            app()->setLocale($tenant->getLanguage());
+        }
+
         return array_merge(parent::share($request), [
             ...parent::share($request),
             'name' => config('app.name'),

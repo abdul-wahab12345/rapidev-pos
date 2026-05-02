@@ -10,8 +10,10 @@ import {
 import { useConfirm } from '@/composables/useConfirm';
 import { AlertTriangle, Info, ShieldAlert } from 'lucide-vue-next';
 import { computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 
 const { open, options, accept, cancel } = useConfirm();
+const { t } = useI18n();
 
 const variantConfig = computed(() => {
     switch (options.value.variant) {
@@ -66,13 +68,13 @@ const variantConfig = computed(() => {
                     @click="cancel"
                     class="flex-1 rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-accent transition-colors sm:flex-none"
                 >
-                    {{ options.cancelLabel }}
+                    {{ options.cancelLabel ?? t('common.cancel') }}
                 </button>
                 <button
                     @click="accept"
                     :class="['flex-1 rounded-lg px-4 py-2 text-sm font-semibold transition-colors sm:flex-none', variantConfig.btnClass]"
                 >
-                    {{ options.confirmLabel }}
+                    {{ options.confirmLabel ?? t('common.confirm') }}
                 </button>
             </DialogFooter>
         </DialogContent>

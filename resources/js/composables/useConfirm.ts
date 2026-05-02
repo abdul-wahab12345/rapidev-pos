@@ -2,7 +2,7 @@ import { ref } from 'vue';
 
 export type ConfirmVariant = 'danger' | 'warning' | 'info';
 
-interface ConfirmOptions {
+export interface ConfirmOptions {
     title: string;
     message: string;
     confirmLabel?: string;
@@ -10,13 +10,10 @@ interface ConfirmOptions {
     variant?: ConfirmVariant;
 }
 
-// Shared reactive state — single instance across the app
 const open = ref(false);
 const options = ref<ConfirmOptions>({
-    title: 'Are you sure?',
+    title: '',
     message: '',
-    confirmLabel: 'Confirm',
-    cancelLabel: 'Cancel',
     variant: 'danger',
 });
 
@@ -25,8 +22,6 @@ let resolveFn: ((value: boolean) => void) | null = null;
 export function useConfirm() {
     function confirm(opts: ConfirmOptions): Promise<boolean> {
         options.value = {
-            confirmLabel: 'Confirm',
-            cancelLabel: 'Cancel',
             variant: 'danger',
             ...opts,
         };
