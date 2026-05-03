@@ -7,10 +7,13 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Expenses\ExpenseController;
 use App\Http\Controllers\Inventory\ProductController;
 use App\Http\Controllers\Inventory\StockController;
+use App\Http\Controllers\Locations\LocationsController;
 use App\Http\Controllers\Parties\PartyController;
 use App\Http\Controllers\Pos\PosController;
 use App\Http\Controllers\Purchasing\PurchaseOrderController;
 use App\Http\Controllers\Purchasing\SupplierController;
+use App\Http\Controllers\GlobalSearchController;
+use App\Http\Controllers\RateLists\RateListController;
 use App\Http\Controllers\Returns\ReturnController;
 use App\Http\Controllers\Sales\SalesController;
 use Illuminate\Support\Facades\Route;
@@ -24,6 +27,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::get('dashboard', DashboardController::class)->name('dashboard');
 
+    Route::get('search', [GlobalSearchController::class, 'search'])->name('global-search');
+
     // ── POS ──────────────────────────────────────────────────
     Route::prefix('pos')->name('pos.')->group(function () {
         Route::get('/', [PosController::class, 'index'])->name('cashier');
@@ -33,6 +38,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/customers/search', [PosController::class, 'searchCustomers'])->name('customers.search');
         Route::post('/customers', [PosController::class, 'storeCustomer'])->name('customers.store');
         Route::get('/stats', [PosController::class, 'stats'])->name('stats');
+        Route::get('/rate-lists/{rateListId}/prices', [PosController::class, 'rateListPrices'])->name('rate-lists.prices');
     });
 
     // ── Customers ────────────────────────────────────────────
@@ -118,6 +124,27 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('/', [ExpenseController::class, 'store'])->name('store');
         Route::patch('/{expense}', [ExpenseController::class, 'update'])->name('update');
         Route::delete('/{expense}', [ExpenseController::class, 'destroy'])->name('destroy');
+    });
+
+    // ── Rate Lists ────────────────────────────────────────
+    Route::prefix('rate-lists')->name('rate-lists.')->group(function () {
+        Route::get('/', [RateListController::class, 'index'])->name('index');
+        Route::post('/', [RateListController::class, 'store'])->name('store');
+        Route::patch('/{rateList}', [RateListController::class, 'update'])->name('update');
+        Route::delete('/{rateList}', [RateListController::class, 'destroy'])->name('destroy');
+        Route::post('/{rateList}/activate', [RateListController::class, 'activate'])->name('activate');
+        Route::post('/{rateList}/deactivate', [RateListController::class, 'deactivate'])->name('deactivate');
+        Route::get('/{rateList}/prices', [RateListController::class, 'show'])->name('show');
+        Route::post('/{rateList}/prices', [RateListController::class, 'savePrices'])->name('save-prices');
+    });
+
+    Route::prefix('locations')->name('locations.')->group(function () {
+        Route::get('/', [LocationsController::class, 'index'])->name('index');
+        Route::get('options/cities', [LocationsController::class, 'citiesJson'])->name('cities.json');
+        Route::get('cities/{city}/areas', [LocationsController::class, 'areasForCity'])->name('cities.areas.index');
+        Route::post('areas', [LocationsController::class, 'storeArea'])->name('areas.store');
+        Route::patch('areas/{area}', [LocationsController::class, 'updateArea'])->name('areas.update');
+        Route::delete('areas/{area}', [LocationsController::class, 'destroyArea'])->name('areas.destroy');
     });
 
     // ── Business Settings ──────────────────────────────────

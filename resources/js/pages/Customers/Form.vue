@@ -1,9 +1,14 @@
 <script setup lang="ts">
+import SearchableSelect, { type SearchableOption } from '@/components/SearchableSelect.vue';
 import AppLayout from '@/layouts/AppLayout.vue';
+import {
+    fetchAreaSearchOptionsForCity,
+    fetchCitySearchOptions,
+} from '@/composables/useLocationOptions';
 import type { BreadcrumbItem } from '@/types';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import { ArrowLeft, Save } from 'lucide-vue-next';
-import { computed } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 interface CustomerData {
@@ -15,6 +20,8 @@ interface CustomerData {
     notes: string | null;
     credit_limit: number;
     discount_percent: number;
+    city_id?: number | null;
+    area_id?: number | null;
 }
 
 const props = defineProps<{ customer: CustomerData | null }>();
@@ -29,14 +36,59 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 ]);
 
 const form = useForm({
-    name:             props.customer?.name             ?? '',
-    phone:            props.customer?.phone            ?? '',
-    cnic:             props.customer?.cnic             ?? '',
-    address:          props.customer?.address          ?? '',
-    notes:            props.customer?.notes            ?? '',
-    credit_limit:     props.customer?.credit_limit     ?? '',
+    name: props.customer?.name ?? '',
+    phone: props.customer?.phone ?? '',
+    cnic: props.customer?.cnic ?? '',
+    address: props.customer?.address ?? '',
+    notes: props.customer?.notes ?? '',
+    credit_limit: props.customer?.credit_limit ?? '',
     discount_percent: props.customer?.discount_percent ?? '',
+    city_id: props.customer?.city_id ?? null,
+    area_id: props.customer?.area_id ?? null,
 });
+
+const cityOptions = ref<SearchableOption[]>([]);
+const areaOptions = ref<SearchableOption[]>([]);
+const areasBusy = ref(false);
+
+onMounted(async () => {
+    try {
+        cityOptions.value = await fetchCitySearchOptions();
+    } catch {
+        cityOptions.value = [];
+    }
+
+    const cid = form.city_id;
+    if (cid) {
+        areasBusy.value = true;
+        try {
+            areaOptions.value = await fetchAreaSearchOptionsForCity(cid);
+        } finally {
+            areasBusy.value = false;
+        }
+    }
+});
+
+watch(
+    () => form.city_id,
+    async (cid, prev) => {
+        if (cid !== prev) {
+            form.area_id = null;
+        }
+        if (!cid) {
+            areaOptions.value = [];
+            return;
+        }
+        areasBusy.value = true;
+        try {
+            areaOptions.value = await fetchAreaSearchOptionsForCity(cid);
+        } catch {
+            areaOptions.value = [];
+        } finally {
+            areasBusy.value = false;
+        }
+    },
+);
 
 function submit() {
     if (isEdit && props.customer?.id) {
@@ -51,8 +103,7 @@ function submit() {
     <Head :title="isEdit ? t('customers.editCustomerTitle') : t('customers.addCustomerTitle')" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
-        <div class="flex flex-col gap-6 p-6 max-w-xl">
-
+        <div class="flex flex-col gap-6 p-6 max-w-2xl">
             <!-- Header -->
             <div class="flex items-center gap-3">
                 <Link
@@ -68,7 +119,6 @@ function submit() {
 
             <!-- Form -->
             <form @submit.prevent="submit" class="space-y-4 rounded-xl border border-border bg-card p-6">
-
                 <!-- Name -->
                 <div>
                     <label class="mb-1.5 block text-sm font-medium text-foreground">
@@ -121,7 +171,46 @@ function submit() {
                     />
                 </div>
 
-                <!-- Credit limit + Discount % (side by side) -->
+                <!-- City / Area -->
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div class="space-y-1.5">
+                        <label class="block text-sm font-medium text-foreground">{{ t('customers.cityPick') }}</label>
+                        <SearchableSelect
+                            button-id="cust-city-select"
+                            v-model="form.city_id"
+                            :options="cityOptions"
+                            :placeholder="t('customers.cityPlaceholder')"
+                            :search-placeholder="t('locations.searchCities')"
+                            :empty-text="t('customers.noCityMatches')"
+                            class="[&_[data-searchable-trigger]]:w-full"
+                        />
+                        <p class="text-xs text-muted-foreground">{{ t('customers.cityHelp') }}</p>
+                        <p v-if="form.errors.city_id" class="text-xs text-destructive">{{ form.errors.city_id }}</p>
+                    </div>
+                    <div class="space-y-1.5">
+                        <label class="block text-sm font-medium text-foreground">{{ t('customers.areaPick') }}</label>
+                        <SearchableSelect
+                            button-id="cust-area-select"
+                            v-model="form.area_id"
+                            :disabled="!form.city_id || areasBusy"
+                            :options="areaOptions"
+                            :placeholder="
+                                areasBusy
+                                    ? t('locations.areasLoading')
+                                    : form.city_id
+                                      ? t('customers.areaPlaceholder')
+                                      : t('customers.areaNeedsCity')
+                            "
+                            :search-placeholder="t('locations.searchAreas')"
+                            :empty-text="t('customers.noAreasForCity')"
+                            class="[&_[data-searchable-trigger]]:w-full"
+                        />
+                        <p class="text-xs text-muted-foreground">{{ t('customers.areaHelp') }}</p>
+                        <p v-if="form.errors.area_id" class="text-xs text-destructive">{{ form.errors.area_id }}</p>
+                    </div>
+                </div>
+
+                <!-- Credit limit + Discount % -->
                 <div class="grid grid-cols-2 gap-3">
                     <div>
                         <label class="mb-1.5 block text-sm font-medium text-foreground">
@@ -152,7 +241,9 @@ function submit() {
                                 class="w-full rounded-lg border border-input bg-background px-3 py-2 pe-7 text-sm placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
                                 :class="form.errors.discount_percent ? 'border-destructive' : ''"
                             />
-                            <span class="pointer-events-none absolute end-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
+                            <span class="pointer-events-none absolute end-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">
+                                %
+                            </span>
                         </div>
                         <p v-if="form.errors.discount_percent" class="mt-1 text-xs text-destructive">{{ form.errors.discount_percent }}</p>
                     </div>
@@ -165,7 +256,7 @@ function submit() {
                         v-model="form.notes"
                         rows="3"
                         :placeholder="t('customers.notesPlaceholder')"
-                        class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                        class="w-full resize-none rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
                     />
                 </div>
 
@@ -173,15 +264,17 @@ function submit() {
                 <div class="flex gap-2 pt-2">
                     <Link
                         :href="isEdit ? route('customers.show', customer!.id) : route('customers.index')"
-                        class="flex-1 rounded-xl border border-border py-2.5 text-center text-sm text-muted-foreground hover:bg-accent transition-colors"
-                    >{{ t('common.cancel') }}</Link>
+                        class="flex flex-1 items-center justify-center rounded-xl border border-border py-2.5 text-center text-sm text-muted-foreground transition-colors hover:bg-accent"
+                    >
+                        {{ t('common.cancel') }}
+                    </Link>
                     <button
                         type="submit"
                         :disabled="form.processing"
-                        class="flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-bold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-60"
+                        class="flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-bold text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-60"
                     >
                         <Save class="h-4 w-4" />
-                        {{ form.processing ? t('common.saving') : (isEdit ? t('common.saveChanges') : t('customers.addCustomer')) }}
+                        {{ form.processing ? t('common.saving') : isEdit ? t('common.saveChanges') : t('customers.addCustomer') }}
                     </button>
                 </div>
             </form>

@@ -55,8 +55,9 @@ const form = useForm({
     tax_rate:         props.settings.tax_rate         ?? 17,
     receipt_header:   props.settings.receipt_header   ?? '',
     receipt_footer:   props.settings.receipt_footer   ?? 'Thank you for your business!',
-    receipt_show_tax: props.settings.receipt_show_tax ?? true,
-    receipt_show_logo:props.settings.receipt_show_logo?? true,
+    receipt_show_tax:  props.settings.receipt_show_tax  ?? true,
+    receipt_show_logo: props.settings.receipt_show_logo ?? true,
+    invoice_template:  props.settings.invoice_template  ?? 'thermal',
 });
 
 function save() {
@@ -314,32 +315,109 @@ async function uploadLogo(e: Event) {
                     </label>
                 </div>
 
-                <!-- Receipt Preview -->
-                <div class="rounded-xl border border-border bg-muted/30 p-4">
-                    <p class="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
-                        <Printer class="h-3.5 w-3.5" />
-                        {{ t('settings.receiptPreview80mm') }}
-                    </p>
-                    <div class="mx-auto max-w-[320px] rounded-lg bg-white dark:bg-zinc-900 p-4 font-mono text-[11px] text-zinc-800 dark:text-zinc-200 shadow-sm border border-border">
-                        <div v-if="form.receipt_show_logo && logoPreview" class="mb-2 flex justify-center">
-                            <img :src="logoPreview" :alt="t('settings.logo')" class="h-12 object-contain" />
-                        </div>
-                        <div class="text-center font-bold text-sm">{{ form.business_name || tenant_name }}</div>
-                        <div v-if="form.business_phone" class="text-center text-[10px] text-zinc-500">{{ form.business_phone }}</div>
-                        <div v-if="form.business_address" class="text-center text-[10px] text-zinc-500">{{ form.business_address }}<span v-if="form.business_city">, {{ form.business_city }}</span></div>
-                        <div v-if="form.receipt_header" class="mt-2 text-center text-[10px] text-zinc-500 italic">{{ form.receipt_header }}</div>
-                        <div class="my-2 border-t border-dashed border-zinc-300 dark:border-zinc-700"></div>
-                        <div class="flex justify-between"><span>{{ t('settings.receiptDemoItem1') }}</span><span>{{ t('settings.receiptDemoItemLine1') }}</span></div>
-                        <div class="flex justify-between"><span>{{ t('settings.receiptDemoItem2') }}</span><span>{{ t('settings.receiptDemoItemLine2') }}</span></div>
-                        <div class="my-2 border-t border-dashed border-zinc-300 dark:border-zinc-700"></div>
-                        <div class="flex justify-between"><span>{{ t('receipt.subtotal') }}</span><span>Rs 600</span></div>
-                        <div v-if="form.tax_enabled && form.receipt_show_tax" class="flex justify-between text-zinc-500">
-                            <span>{{ form.tax_name }} ({{ form.tax_rate }}%)</span><span>Rs {{ Math.round(600 * (form.tax_rate / 100)) }}</span>
-                        </div>
-                        <div class="flex justify-between font-bold"><span>{{ t('receipt.grandTotal') }}</span><span>Rs {{ form.tax_enabled && form.receipt_show_tax ? Math.round(600 * (1 + form.tax_rate / 100)) : 600 }}</span></div>
-                        <div class="my-2 border-t border-dashed border-zinc-300 dark:border-zinc-700"></div>
-                        <div v-if="form.receipt_footer" class="text-center text-[10px] text-zinc-500">{{ form.receipt_footer }}</div>
+                <!-- Invoice template selector -->
+                <div class="space-y-2">
+                    <Label>{{ t('settings.invoiceTemplate') }}</Label>
+                    <div class="grid grid-cols-2 gap-3">
+                        <label
+                            class="flex cursor-pointer flex-col gap-1 rounded-lg border p-3 transition-colors hover:bg-muted/40"
+                            :class="form.invoice_template === 'thermal' ? 'border-primary ring-1 ring-primary/30' : 'border-border'"
+                        >
+                            <input type="radio" v-model="form.invoice_template" value="thermal" class="sr-only" />
+                            <span class="text-sm font-medium">{{ t('settings.templateThermal') }}</span>
+                            <span class="text-xs text-muted-foreground">{{ t('settings.templateThermalDesc') }}</span>
+                        </label>
+                        <label
+                            class="flex cursor-pointer flex-col gap-1 rounded-lg border p-3 transition-colors hover:bg-muted/40"
+                            :class="form.invoice_template === 'a4' ? 'border-primary ring-1 ring-primary/30' : 'border-border'"
+                        >
+                            <input type="radio" v-model="form.invoice_template" value="a4" class="sr-only" />
+                            <span class="text-sm font-medium">{{ t('settings.templateA4') }}</span>
+                            <span class="text-xs text-muted-foreground">{{ t('settings.templateA4Desc') }}</span>
+                        </label>
                     </div>
+                </div>
+
+                <!-- Previews -->
+                <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+
+                    <!-- Thermal preview -->
+                    <div class="rounded-xl border bg-muted/30 p-4" :class="form.invoice_template === 'thermal' ? 'border-primary ring-1 ring-primary/20' : 'border-border'">
+                        <p class="mb-3 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            <Printer class="h-3.5 w-3.5" />
+                            {{ t('settings.templateThermal') }}
+                            <span v-if="form.invoice_template === 'thermal'" class="ms-auto rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">{{ t('common.active') }}</span>
+                        </p>
+                        <div class="mx-auto max-w-[220px] rounded-lg bg-white dark:bg-zinc-900 p-3 font-mono text-[10px] text-zinc-800 dark:text-zinc-200 shadow-sm border border-border">
+                            <div v-if="form.receipt_show_logo && logoPreview" class="mb-1.5 flex justify-center">
+                                <img :src="logoPreview" :alt="t('settings.logo')" class="h-8 object-contain" />
+                            </div>
+                            <div class="text-center font-bold text-xs">{{ form.business_name || '—' }}</div>
+                            <div v-if="form.business_phone" class="text-center text-[9px] text-zinc-500">{{ form.business_phone }}</div>
+                            <div v-if="form.receipt_header" class="text-center text-[9px] text-zinc-500 italic">{{ form.receipt_header }}</div>
+                            <div class="my-1.5 border-t border-dashed border-zinc-300 dark:border-zinc-600"></div>
+                            <div class="flex justify-between"><span>{{ t('settings.receiptDemoItem1') }}</span><span>{{ t('settings.receiptDemoItemLine1') }}</span></div>
+                            <div class="flex justify-between"><span>{{ t('settings.receiptDemoItem2') }}</span><span>{{ t('settings.receiptDemoItemLine2') }}</span></div>
+                            <div class="my-1.5 border-t border-dashed border-zinc-300 dark:border-zinc-600"></div>
+                            <div class="flex justify-between font-bold"><span>{{ t('receipt.grandTotal') }}</span><span>Rs 600</span></div>
+                            <div class="my-1.5 border-t border-dashed border-zinc-300 dark:border-zinc-600"></div>
+                            <div v-if="form.receipt_footer" class="text-center text-[9px] text-zinc-500">{{ form.receipt_footer }}</div>
+                        </div>
+                    </div>
+
+                    <!-- A4 preview -->
+                    <div class="rounded-xl border bg-muted/30 p-4" :class="form.invoice_template === 'a4' ? 'border-primary ring-1 ring-primary/20' : 'border-border'">
+                        <p class="mb-3 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            <Printer class="h-3.5 w-3.5" />
+                            {{ t('settings.templateA4') }}
+                            <span v-if="form.invoice_template === 'a4'" class="ms-auto rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">{{ t('common.active') }}</span>
+                        </p>
+                        <div class="relative overflow-hidden rounded-lg bg-white dark:bg-zinc-900 p-3 text-[10px] text-zinc-800 dark:text-zinc-200 shadow-sm border border-border">
+                            <!-- Watermark preview -->
+                            <div class="pointer-events-none absolute inset-0 flex items-center justify-center">
+                                <span class="rotate-[-45deg] text-[28px] font-black uppercase tracking-widest text-zinc-900/[0.04] dark:text-white/[0.04] whitespace-nowrap">{{ form.business_name || '—' }}</span>
+                            </div>
+                            <!-- Header row -->
+                            <div class="flex items-start justify-between mb-2">
+                                <div>
+                                    <div v-if="form.receipt_show_logo && logoPreview" class="mb-1">
+                                        <img :src="logoPreview" :alt="t('settings.logo')" class="h-6 object-contain" />
+                                    </div>
+                                    <div class="font-bold text-[11px]">{{ form.business_name || '—' }}</div>
+                                    <div v-if="form.business_phone" class="text-[9px] text-zinc-500">{{ form.business_phone }}</div>
+                                </div>
+                                <div class="rounded bg-zinc-900 dark:bg-zinc-100 px-2 py-1 text-[9px] font-bold text-white dark:text-zinc-900">{{ t('receipt.invoice').replace(':','') }}</div>
+                            </div>
+                            <div class="border-t-2 border-zinc-900 dark:border-zinc-200 mb-2"></div>
+                            <!-- Bill to row -->
+                            <div class="flex justify-between mb-2 text-[9px] text-zinc-500">
+                                <div><div class="font-semibold text-zinc-700 dark:text-zinc-300">{{ t('a4.billTo') }}</div><div>—</div></div>
+                                <div class="text-end"><div class="font-semibold text-zinc-700 dark:text-zinc-300">{{ t('receipt.payment') }}</div><div>CASH</div></div>
+                            </div>
+                            <!-- Items mini table -->
+                            <table class="w-full border-collapse mb-2">
+                                <thead><tr class="bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-[8px]">
+                                    <th class="px-1 py-0.5 text-start">#</th>
+                                    <th class="px-1 py-0.5 text-start">{{ t('receipt.item') }}</th>
+                                    <th class="px-1 py-0.5 text-end">{{ t('receipt.qty') }}</th>
+                                    <th class="px-1 py-0.5 text-end">{{ t('receipt.total') }}</th>
+                                </tr></thead>
+                                <tbody class="text-[9px]">
+                                    <tr class="border-b border-zinc-100 dark:border-zinc-700"><td class="px-1 text-zinc-400">1</td><td class="px-1">{{ t('settings.receiptDemoItem1') }}</td><td class="px-1 text-end">2</td><td class="px-1 text-end">Rs 400</td></tr>
+                                    <tr><td class="px-1 text-zinc-400">2</td><td class="px-1">{{ t('settings.receiptDemoItem2') }}</td><td class="px-1 text-end">1</td><td class="px-1 text-end">Rs 200</td></tr>
+                                </tbody>
+                            </table>
+                            <!-- Totals -->
+                            <div class="flex justify-end">
+                                <div class="text-[9px] w-28">
+                                    <div class="flex justify-between"><span>{{ t('receipt.subtotal') }}</span><span>Rs 600</span></div>
+                                    <div class="flex justify-between font-bold border-t border-zinc-900 dark:border-zinc-200 mt-0.5 pt-0.5"><span>{{ t('receipt.grandTotal') }}</span><span>Rs 600</span></div>
+                                </div>
+                            </div>
+                            <div v-if="form.receipt_footer" class="mt-2 border-t border-zinc-200 dark:border-zinc-700 pt-1 text-center text-[8px] text-zinc-400">{{ form.receipt_footer }}</div>
+                        </div>
+                    </div>
+
                 </div>
             </section>
 

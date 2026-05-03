@@ -15,7 +15,9 @@ class Supplier extends Model
     public $incrementing = false;
 
     protected $fillable = [
-        'tenant_id', 'party_id', 'name', 'company', 'phone', 'email', 'address', 'city',
+        'tenant_id', 'party_id', 'name', 'company', 'phone', 'email', 'address',
+        'city_id', 'area_id',
+        'city',
         'ntn', 'cnic', 'payment_terms', 'opening_balance', 'current_balance',
         'is_active', 'notes',
     ];
@@ -38,6 +40,16 @@ class Supplier extends Model
     public function party(): BelongsTo
     {
         return $this->belongsTo(Party::class, 'party_id');
+    }
+
+    public function districtCity(): BelongsTo
+    {
+        return $this->belongsTo(City::class, 'city_id');
+    }
+
+    public function locality(): BelongsTo
+    {
+        return $this->belongsTo(Area::class, 'area_id');
     }
 
     public function purchaseOrders(): HasMany

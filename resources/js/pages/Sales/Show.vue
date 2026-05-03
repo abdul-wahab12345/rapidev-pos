@@ -8,7 +8,7 @@ import type { BreadcrumbItem } from '@/types';
 import { useConfirm } from '@/composables/useConfirm';
 import { useReceipt } from '@/composables/useReceipt';
 import { formatMoney, formatDateTime } from '@/utils/format';
-import { paymentBadge } from '@/constants/badges';
+import { paymentBadge, statusBadge } from '@/constants/badges';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { AlertTriangle, ArrowLeft, ArrowUpLeft, Eye, Printer, RotateCcw } from 'lucide-vue-next';
 import { computed, reactive, ref } from 'vue';
@@ -127,10 +127,11 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 ]);
 
 function saleStatusLabel(status: string) {
-    if (status === 'completed') return t('common.completed');
-    if (status === 'voided') return t('sales.voided');
+    if (status === 'completed')          return t('common.completed');
+    if (status === 'voided')             return t('sales.voided');
     if (status === 'partially_returned') return t('sales.partiallyReturned');
-    if (status === 'pending') return t('sales.pendingSale');
+    if (status === 'returned')           return t('sales.returned');
+    if (status === 'pending')            return t('sales.pendingSale');
     return status;
 }
 
@@ -156,16 +157,19 @@ async function voidSale() {
     router.post(route('sales.void', props.sale.id));
 }
 
-// ── Reprint receipt ───────────────────────────────────────────
-const { printReceipt: openReceiptPrint } = useReceipt();
+// ── Print ─────────────────────────────────────────────────────
+const { printReceipt: openPrint } = useReceipt();
+const printing = ref(false);
 
 async function printReceipt() {
+    printing.value = true;
     try {
         const response = await fetch(route('sales.receipt', props.sale.id));
-        const data = await response.json();
-        openReceiptPrint(data);
-    } catch (error) {
-        console.error('Failed to print receipt:', error);
+        openPrint(await response.json());
+    } catch (e) {
+        console.error('Print failed:', e);
+    } finally {
+        printing.value = false;
     }
 }
 </script>
@@ -185,9 +189,7 @@ async function printReceipt() {
                     <div class="flex items-center gap-3">
                         <h1 class="font-mono text-2xl font-black tracking-tight">{{ sale.invoice_number }}</h1>
                         <span
-                            :class="sale.status === 'completed'
-                                ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400'
-                                : 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400'"
+                            :class="statusBadge[sale.status] ?? 'bg-muted text-muted-foreground'"
                             class="rounded-full px-2.5 py-0.5 text-xs font-semibold"
                         >{{ saleStatusLabel(sale.status) }}</span>
                     </div>
@@ -197,9 +199,10 @@ async function printReceipt() {
                 <div class="flex items-center gap-2">
                     <button
                         @click="printReceipt"
-                        class="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-accent transition-colors"
+                        :disabled="printing"
+                        class="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-accent transition-colors disabled:opacity-50"
                     >
-                        <Printer class="h-4 w-4" />
+                        <Printer class="h-4 w-4" :class="printing ? 'animate-pulse' : ''" />
                         {{ t('sales.printReceipt') }}
                     </button>
                     <button

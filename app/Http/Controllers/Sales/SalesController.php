@@ -181,7 +181,7 @@ class SalesController extends Controller
     // AJAX: return full receipt data for inline printing from the list page
     public function receiptData(Sale $sale): JsonResponse
     {
-        $sale->load(['items', 'customer:id,name,phone', 'cashier:id,name', 'branch:id,name']);
+        $sale->load(['items.product:id,name_ur', 'customer:id,name,phone', 'cashier:id,name', 'branch:id,name']);
 
         $tenant   = auth()->user()->tenant;
         $settings = $tenant?->settings ?? [];
@@ -206,6 +206,7 @@ class SalesController extends Controller
             'branch'           => ['name' => $sale->branch?->name],
             'items'            => $sale->items->map(fn ($i) => [
                 'name'          => $i->product_name,
+                'name_ur'       => optional($i->product)->name_ur,
                 'variant_label' => $i->variant_label,
                 'quantity'      => $i->quantity,
                 'unit_price'    => (float) $i->unit_price,
@@ -213,15 +214,16 @@ class SalesController extends Controller
                 'line_total'    => (float) $i->line_total,
             ]),
             // tenant settings for receipt rendering
-            'business_name'    => data_get($settings, 'business_name', $tenant?->name ?? ''),
-            'business_phone'   => data_get($settings, 'business_phone'),
-            'business_address' => data_get($settings, 'business_address'),
-            'business_city'    => data_get($settings, 'business_city'),
-            'logo_url'         => data_get($settings, 'logo_url'),
-            'receipt_header'   => data_get($settings, 'receipt_header'),
-            'receipt_footer'   => data_get($settings, 'receipt_footer', 'Thank you for your business!'),
-            'currency_symbol'  => data_get($settings, 'currency_symbol', 'Rs'),
-            'language'         => data_get($settings, 'language', 'en'),
+            'business_name'     => data_get($settings, 'business_name', $tenant?->name ?? ''),
+            'business_phone'    => data_get($settings, 'business_phone'),
+            'business_address'  => data_get($settings, 'business_address'),
+            'business_city'     => data_get($settings, 'business_city'),
+            'logo_url'          => data_get($settings, 'logo_url'),
+            'receipt_header'    => data_get($settings, 'receipt_header'),
+            'receipt_footer'    => data_get($settings, 'receipt_footer', 'Thank you for your business!'),
+            'currency_symbol'   => data_get($settings, 'currency_symbol', 'Rs'),
+            'language'          => data_get($settings, 'language', 'en'),
+            'invoice_template'  => data_get($settings, 'invoice_template', 'thermal'),
         ]);
     }
 

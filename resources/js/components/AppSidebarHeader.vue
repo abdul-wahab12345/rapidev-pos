@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import GlobalSearch from '@/components/GlobalSearch.vue';
 import LanguageSwitcher from '@/components/LanguageSwitcher.vue';
 import ThemeSwitcher from '@/components/ThemeSwitcher.vue';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList, BreadcrumbPage, BreadcrumbSeparator } from '@/components/ui/breadcrumb';
@@ -38,6 +39,7 @@ defineProps<{
         </div>
 
         <div class="flex shrink-0 items-center gap-2">
+            <GlobalSearch />
             <ThemeSwitcher />
             <LanguageSwitcher />
         </div>

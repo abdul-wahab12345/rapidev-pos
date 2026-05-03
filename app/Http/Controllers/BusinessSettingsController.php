@@ -30,8 +30,9 @@ class BusinessSettingsController extends Controller
             'tax_rate'         => 17,
             'receipt_header'   => '',
             'receipt_footer'   => 'Thank you for your business!',
-            'receipt_show_tax' => true,
-            'receipt_show_logo'=> true,
+            'receipt_show_tax'  => true,
+            'receipt_show_logo' => true,
+            'invoice_template'  => 'thermal',
         ], $tenant->settings ?? []);
 
         return Inertia::render('settings/Business', [
@@ -57,8 +58,9 @@ class BusinessSettingsController extends Controller
             'tax_rate'         => 'nullable|numeric|min:0|max:100',
             'receipt_header'   => 'nullable|string|max:300',
             'receipt_footer'   => 'nullable|string|max:300',
-            'receipt_show_tax' => 'boolean',
-            'receipt_show_logo'=> 'boolean',
+            'receipt_show_tax'  => 'boolean',
+            'receipt_show_logo' => 'boolean',
+            'invoice_template'  => 'required|in:thermal,a4',
         ]);
 
         $tenant = auth()->user()->tenant;

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Customers;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Locations\LocationsController;
+use App\Models\City;
 use App\Models\Customer;
 use App\Models\CustomerLedgerEntry;
 use App\Models\Party;
@@ -63,6 +65,8 @@ class CustomersController extends Controller
 
     public function show(Customer $customer): Response
     {
+        $customer->load(['city:id,name,province', 'locality:id,name']);
+
         $ledger = CustomerLedgerEntry::where('customer_id', $customer->id)
             ->orderByDesc('created_at')
             ->paginate(20);
@@ -93,6 +97,10 @@ class CustomersController extends Controller
                 'total_spend'      => (float) $customer->total_spend,
                 'created_at'       => $customer->created_at,
                 'party_id'         => $customer->party_id,
+                'city_id'          => $customer->city_id,
+                'area_id'          => $customer->area_id,
+                'city_label'       => $customer->city?->name,
+                'area_label'       => $customer->locality?->name,
             ],
             'linked_supplier' => $supplier ? [
                 'id'              => $supplier->id,
@@ -142,16 +150,30 @@ class CustomersController extends Controller
             'notes'            => 'nullable|string|max:1000',
             'credit_limit'     => 'nullable|numeric|min:0',
             'discount_percent' => 'nullable|numeric|min:0|max:100',
+            'city_id'          => 'nullable|integer|exists:cities,id',
+            'area_id'          => 'nullable|integer|exists:areas,id',
         ]);
 
-        DB::transaction(function () use ($validated) {
+        LocationsController::assertAreaMatchesCityTenant(
+            isset($validated['city_id']) ? (int) $validated['city_id'] : null,
+            isset($validated['area_id']) ? (int) $validated['area_id'] : null,
+            (string) auth()->user()->tenant_id
+        );
+
+        $tenantId       = (string) auth()->user()->tenant_id;
+        $partyCityLabel = isset($validated['city_id'])
+            ? City::find($validated['city_id'])?->name
+            : null;
+
+        DB::transaction(function () use ($validated, $tenantId, $partyCityLabel) {
             $party = Party::create([
-                'tenant_id'   => auth()->user()->tenant_id,
+                'tenant_id'   => $tenantId,
                 'name'        => $validated['name'],
                 'phone'       => $validated['phone'] ?? null,
                 'cnic'        => $validated['cnic'] ?? null,
                 'address'     => $validated['address'] ?? null,
                 'notes'       => $validated['notes'] ?? null,
+                'city'        => $partyCityLabel,
                 'is_customer' => true,
                 'is_supplier' => false,
             ]);
@@ -163,6 +185,8 @@ class CustomersController extends Controller
                 'cnic'             => $validated['cnic'] ?? null,
                 'address'          => $validated['address'] ?? null,
                 'notes'            => $validated['notes'] ?? null,
+                'city_id'          => $validated['city_id'] ?? null,
+                'area_id'          => $validated['area_id'] ?? null,
                 'credit_limit'     => isset($validated['credit_limit']) ? (float) $validated['credit_limit'] : 0,
                 'discount_percent' => isset($validated['discount_percent']) ? (float) $validated['discount_percent'] : 0,
                 'current_balance'  => 0,
@@ -185,6 +209,8 @@ class CustomersController extends Controller
                 'notes'            => $customer->notes,
                 'credit_limit'     => (float) $customer->credit_limit,
                 'discount_percent' => (float) $customer->discount_percent,
+                'city_id'          => $customer->city_id,
+                'area_id'          => $customer->area_id,
             ],
         ]);
     }
@@ -199,7 +225,19 @@ class CustomersController extends Controller
             'notes'            => 'nullable|string|max:1000',
             'credit_limit'     => 'nullable|numeric|min:0',
             'discount_percent' => 'nullable|numeric|min:0|max:100',
+            'city_id'          => 'nullable|integer|exists:cities,id',
+            'area_id'          => 'nullable|integer|exists:areas,id',
         ]);
+
+        LocationsController::assertAreaMatchesCityTenant(
+            isset($validated['city_id']) ? (int) $validated['city_id'] : null,
+            isset($validated['area_id']) ? (int) $validated['area_id'] : null,
+            (string) auth()->user()->tenant_id
+        );
+
+        $partyCityLabel = isset($validated['city_id'])
+            ? City::find($validated['city_id'])?->name
+            : null;
 
         $customer->update([
             'name'             => $validated['name'],
@@ -207,9 +245,22 @@ class CustomersController extends Controller
             'cnic'             => $validated['cnic'] ?? null,
             'address'          => $validated['address'] ?? null,
             'notes'            => $validated['notes'] ?? null,
+            'city_id'          => $validated['city_id'] ?? null,
+            'area_id'          => $validated['area_id'] ?? null,
             'credit_limit'     => isset($validated['credit_limit']) ? (float) $validated['credit_limit'] : (float) $customer->credit_limit,
             'discount_percent' => isset($validated['discount_percent']) ? (float) $validated['discount_percent'] : (float) $customer->discount_percent,
         ]);
+
+        if ($party = $customer->party()->first()) {
+            $party->update([
+                'name'        => $validated['name'],
+                'phone'       => $validated['phone'] ?? null,
+                'cnic'        => $validated['cnic'] ?? null,
+                'address'     => $validated['address'] ?? null,
+                'notes'       => $validated['notes'] ?? null,
+                'city'        => $partyCityLabel,
+            ]);
+        }
 
         return redirect()->route('customers.show', $customer)->with('success', 'Customer updated.');
     }

@@ -4,17 +4,26 @@ import { useCartStore, type CartProduct, type Customer } from '@/stores/cart';
 import { Head } from '@inertiajs/vue3';
 import { useConfirm } from '@/composables/useConfirm';
 import { useReceipt } from '@/composables/useReceipt';
+import { useSound } from '@/composables/useSound';
 import { formatMoney, isUrdu } from '@/utils/format';
 import posService from '@/services/posService';
+import axios from 'axios';
 import {
-    AlertTriangle, Check, ChevronDown, Minus, Percent,
+    AlertTriangle, Check, ChevronDown, ListOrdered, Minus, Percent,
     Plus, Search, ShoppingCart, Tag, User, UserPlus, X,
 } from 'lucide-vue-next';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 const { confirm } = useConfirm();
-const { t } = useI18n();
+const { t, locale } = useI18n();
+
+interface RateListOption {
+    id: string;
+    name: string;
+    name_ur: string | null;
+    is_active: boolean;
+}
 
 const props = defineProps<{
     categories: Array<{ id: string; name: string; color: string }>;
@@ -24,6 +33,9 @@ const props = defineProps<{
     branch: { id: string; name: string } | null;
     tenant: { name: string; settings: Record<string, any> | null };
     stats: { sales_today: number; revenue_today: number; low_stock: number };
+    rateLists: RateListOption[];
+    activeRateListId: string | null;
+    activeRateListPrices: Record<string, number>;
 }>();
 
 // live stats — updated after each completed sale
@@ -39,6 +51,48 @@ async function refreshStats() {
 
 const cart = useCartStore();
 const fmt = formatMoney;
+const { playAddToCart, playSaleComplete } = useSound();
+
+// ── Rate list ───────────────────────────────────────────────────
+const rateListLoading = ref(false);
+
+// Initialise with the active rate list on first load
+onMounted(() => {
+    if (props.activeRateListId) {
+        cart.setRateList(props.activeRateListId, props.activeRateListPrices);
+    }
+});
+
+async function selectRateList(id: string | null) {
+    if (id === cart.selectedRateListId) return;
+
+    if (!id) {
+        cart.setRateList(null, {});
+        return;
+    }
+
+    rateListLoading.value = true;
+    try {
+        const response = await axios.get(route('pos.rate-lists.prices', id));
+        cart.setRateList(id, response.data);
+    } catch {
+        // silently fall back
+    } finally {
+        rateListLoading.value = false;
+    }
+}
+
+const selectedRateListLabel = computed(() => {
+    if (!cart.selectedRateListId) return t('pos.defaultPrice');
+    const rl = props.rateLists.find((r) => r.id === cart.selectedRateListId);
+    if (!rl) return t('pos.defaultPrice');
+    return locale.value === 'ur' && rl.name_ur ? rl.name_ur : rl.name;
+});
+
+function displayPrice(product: CartProduct): number {
+    const ratePrice = cart.getRatePrice(product.id, null);
+    return ratePrice !== null ? ratePrice : product.selling_price;
+}
 
 const paymentMethods = computed(() => [
     { id: 'cash',      label: t('common.cash') },
@@ -214,6 +268,7 @@ async function submitSale() {
             cart.lastSale = { invoice_number: result.sale.invoice_number, total: result.sale.total, change: result.sale.change };
             cart.showPaymentModal = false;
             cart.saleComplete = true;
+            playSaleComplete();
             discountInput.value = 0;
             fetchProducts();
             refreshStats();
@@ -251,6 +306,7 @@ function printReceipt() {
         receipt_footer:   s.receipt_footer   ?? null,
         currency_symbol:  s.currency_symbol  ?? 'Rs',
         language:         s.language         ?? 'en',
+        invoice_template: s.invoice_template ?? 'thermal',
         branch_name:      props.branch?.name ?? null,
         cashier_name:     props.cashier?.name ?? null,
         customer_name:    cart.selectedCustomer?.name ?? null,
@@ -354,7 +410,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKey));
                     <button
                         v-for="product in products"
                         :key="product.id"
-                        @click="cart.addItem(product)"
+                        @click="cart.addItem(product); playAddToCart()"
                         :disabled="product.stock === 0"
                         :class="[
                             'group relative flex min-h-[88px] cursor-pointer flex-col justify-between rounded-xl border p-3 text-left transition-all',
@@ -380,7 +436,10 @@ onUnmounted(() => window.removeEventListener('keydown', handleKey));
                         <p v-if="product.name_ur" class="text-[11px] text-muted-foreground leading-tight mt-0.5" dir="rtl">{{ product.name_ur }}</p>
 
                         <div class="mt-1.5 flex items-end justify-between gap-1">
-                            <span class="text-sm font-bold text-primary">{{ fmt(product.selling_price) }}</span>
+                            <div class="flex flex-col leading-none">
+                                <span class="text-sm font-bold text-primary">{{ fmt(displayPrice(product)) }}</span>
+                                <span v-if="cart.getRatePrice(product.id, null) !== null" class="text-[10px] text-muted-foreground line-through">{{ fmt(product.selling_price) }}</span>
+                            </div>
                             <span class="text-[11px] text-muted-foreground">{{ product.stock > 0 ? `×${product.stock}` : '' }}</span>
                         </div>
                     </button>
@@ -416,6 +475,28 @@ onUnmounted(() => window.removeEventListener('keydown', handleKey));
              RIGHT — Cart
         ════════════════════════════════════════ -->
         <div class="flex w-[340px] shrink-0 flex-col bg-card xl:w-[380px]">
+
+            <!-- Rate list selector (only shown when rate lists exist) -->
+            <div v-if="rateLists.length > 0" class="shrink-0 border-b border-border bg-muted/30 px-4 py-2">
+                <div class="flex items-center gap-2">
+                    <ListOrdered class="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <span class="text-xs text-muted-foreground shrink-0">{{ t('pos.rateList') }}:</span>
+                    <div class="relative flex-1">
+                        <select
+                            :value="cart.selectedRateListId ?? ''"
+                            @change="selectRateList(($event.target as HTMLSelectElement).value || null)"
+                            :disabled="rateListLoading"
+                            class="w-full rounded-md border border-input bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
+                        >
+                            <option value="">{{ t('pos.defaultPrice') }}</option>
+                            <option v-for="rl in rateLists" :key="rl.id" :value="rl.id">
+                                {{ locale === 'ur' && rl.name_ur ? rl.name_ur : rl.name }}
+                                <template v-if="rl.is_active"> ✓</template>
+                            </option>
+                        </select>
+                    </div>
+                </div>
+            </div>
 
             <!-- Cart header -->
             <div class="shrink-0 border-b border-border px-4 py-3">

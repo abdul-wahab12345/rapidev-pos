@@ -8,6 +8,7 @@ use App\Models\Category;
 use App\Models\Customer;
 use App\Models\CustomerLedgerEntry;
 use App\Models\Product;
+use App\Models\RateList;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\StockLevel;
@@ -38,6 +39,20 @@ class PosController extends Controller
         // Load customers for udhaar selector
         $customers = Customer::orderBy('name')
             ->get(['id', 'name', 'phone', 'current_balance', 'credit_limit', 'discount_percent']);
+
+        // Load rate lists for the selector
+        $rateLists = RateList::orderByDesc('is_active')->orderBy('name')->get(['id', 'name', 'name_ur', 'is_active']);
+        $activeRateList = $rateLists->firstWhere('is_active', true);
+
+        // Pre-load active rate list prices keyed by "productId_variantId"
+        $rateListPrices = [];
+        if ($activeRateList) {
+            $activeRateList->load('items');
+            foreach ($activeRateList->items as $item) {
+                $key = $item->product_id . '_' . ($item->variant_id ?? '');
+                $rateListPrices[$key] = (float) $item->price;
+            }
+        }
 
         // Today's stats — exclude voided sales
         $todaySales   = Sale::where('status', '!=', 'voided')->whereDate('created_at', today())->count();
@@ -71,6 +86,14 @@ class PosController extends Controller
                 'revenue_today' => (float) $todayRevenue,
                 'low_stock'     => $lowStockCount,
             ],
+            'rateLists' => $rateLists->map(fn ($rl) => [
+                'id'        => $rl->id,
+                'name'      => $rl->name,
+                'name_ur'   => $rl->name_ur,
+                'is_active' => $rl->is_active,
+            ]),
+            'activeRateListId'     => $activeRateList?->id,
+            'activeRateListPrices' => $rateListPrices,
         ]);
     }
 
@@ -150,6 +173,7 @@ class PosController extends Controller
             'payment.udhaar' => 'nullable|numeric|min:0',
             'discount' => 'nullable|numeric|min:0',
             'notes' => 'nullable|string',
+            'rate_list_id' => 'nullable|exists:rate_lists,id',
         ]);
 
         $user = auth()->user();
@@ -203,6 +227,7 @@ class PosController extends Controller
                     'udhaar_amount'   => $udhaar,
                     'payment_method'  => $validated['payment']['method'],
                     'notes'           => $validated['notes'] ?? null,
+                    'rate_list_id'    => $validated['rate_list_id'] ?? null,
                 ]);
 
                 // Create sale items + decrement stock
@@ -278,6 +303,20 @@ class PosController extends Controller
         } catch (\Exception $e) {
             return response()->json(['error' => 'Sale failed: ' . $e->getMessage()], 500);
         }
+    }
+
+    // AJAX: get rate list prices (called when user switches rate list in POS)
+    public function rateListPrices(string $rateListId): JsonResponse
+    {
+        $rateList = RateList::with('items')->findOrFail($rateListId);
+
+        $prices = [];
+        foreach ($rateList->items as $item) {
+            $key = $item->product_id . '_' . ($item->variant_id ?? '');
+            $prices[$key] = (float) $item->price;
+        }
+
+        return response()->json($prices);
     }
 
     // AJAX: live stats for the bottom bar (called after each sale)

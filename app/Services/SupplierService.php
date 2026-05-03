@@ -28,6 +28,8 @@ class SupplierService
     {
         $supplier->load([
             'party.customer.ledgerEntries' => fn ($q) => $q->orderByDesc('created_at')->limit(15),
+            'districtCity:id,name,province',
+            'locality:id,name',
             'purchaseOrders'               => fn ($q) => $q->orderByDesc('order_date')->limit(20),
         ]);
 
@@ -45,7 +47,11 @@ class SupplierService
                 'phone'           => $supplier->phone,
                 'email'           => $supplier->email,
                 'address'         => $supplier->address,
-                'city'            => $supplier->city,
+                'city'            => $supplier->districtCity?->name ?? $supplier->city,
+                'city_id'         => $supplier->city_id,
+                'area_id'         => $supplier->area_id,
+                'province_label'  => $supplier->districtCity?->province,
+                'area_label'      => $supplier->locality?->name,
                 'ntn'             => $supplier->ntn,
                 'payment_terms'   => $supplier->payment_terms,
                 'current_balance' => $ap,
@@ -85,7 +91,10 @@ class SupplierService
             'company'         => $supplier->company,
             'phone'           => $supplier->phone,
             'email'           => $supplier->email,
-            'city'            => $supplier->city,
+            'city'            => $supplier->districtCity?->name ?? $supplier->city,
+            'area'            => $supplier->locality?->name,
+            'city_id'         => $supplier->city_id,
+            'area_id'         => $supplier->area_id,
             'payment_terms'   => $supplier->payment_terms,
             'current_balance' => $ap,
             'ar_balance'      => $ar,

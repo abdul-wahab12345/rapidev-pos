@@ -17,6 +17,8 @@ class DemoSeeder extends Seeder
 {
     public function run(): void
     {
+        $this->call(PakistanCitiesSeeder::class);
+
         // Create demo tenant
         $tenant = Tenant::create([
             'id' => (string) Str::uuid(),

@@ -10,6 +10,7 @@ class Customer extends TenantAware
 {
     protected $fillable = [
         'tenant_id', 'party_id', 'name', 'phone', 'cnic', 'address', 'notes',
+        'city_id', 'area_id',
         'current_balance', 'credit_limit', 'discount_percent', 'total_spend',
     ];
 
@@ -23,6 +24,16 @@ class Customer extends TenantAware
     public function party(): BelongsTo
     {
         return $this->belongsTo(Party::class, 'party_id');
+    }
+
+    public function city(): BelongsTo
+    {
+        return $this->belongsTo(City::class, 'city_id');
+    }
+
+    public function locality(): BelongsTo
+    {
+        return $this->belongsTo(Area::class, 'area_id');
     }
 
     public function sales(): HasMany

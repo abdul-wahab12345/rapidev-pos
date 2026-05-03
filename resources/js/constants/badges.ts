@@ -7,9 +7,23 @@ export const paymentBadge: Record<string, string> = {
 };
 
 export const statusBadge: Record<string, string> = {
-    completed: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400',
-    voided:    'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400',
-    pending:   'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400',
+    completed:          'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400',
+    voided:             'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400',
+    pending:            'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-400',
+    partially_returned: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400',
+    returned:           'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400',
+    draft:              'bg-muted text-muted-foreground',
+    cancelled:          'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400',
+    received:           'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400',
+    partially_received: 'bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400',
+};
+
+export const saleStatusVariant: Record<string, 'success' | 'destructive' | 'warning' | 'info' | 'purple' | 'secondary' | 'outline'> = {
+    completed:          'success',
+    voided:             'destructive',
+    pending:            'warning',
+    partially_returned: 'warning',
+    returned:           'info',
 };
 
 export const ledgerTypeBadge: Record<string, { labelKey: string; class: string }> = {

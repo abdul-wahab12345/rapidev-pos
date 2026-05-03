@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Sale extends TenantAware
 {
     protected $fillable = [
-        'tenant_id', 'branch_id', 'user_id', 'customer_id', 'invoice_number',
+        'tenant_id', 'branch_id', 'user_id', 'customer_id', 'rate_list_id', 'invoice_number',
         'status', 'subtotal', 'discount', 'tax', 'total', 'paid', 'change_amount',
         'cash_amount', 'jazzcash_amount', 'easypaisa_amount', 'udhaar_amount',
         'payment_method', 'notes',

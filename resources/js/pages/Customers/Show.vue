@@ -6,7 +6,7 @@ import { paymentBadge, ledgerTypeBadge } from '@/constants/badges';
 import type { BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import {
-    ArrowLeft, BookOpen, Building2, CreditCard, Edit, Phone,
+    ArrowLeft, BookOpen, Building2, CreditCard, Edit, MapPin, Phone,
     ShoppingBag, Trash2, Undo2, Wallet,
 } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
@@ -46,6 +46,8 @@ interface Customer {
     total_spend: number;
     created_at: string;
     party_id: string | null;
+    city_label?: string | null;
+    area_label?: string | null;
 }
 
 interface LinkedSupplier {
@@ -163,6 +165,16 @@ const typeLabel = ledgerTypeBadge;
                         </span>
                         <span v-if="customer.cnic">{{ t('customers.cnicShort') }}: {{ customer.cnic }}</span>
                         <span v-if="customer.address">{{ customer.address }}</span>
+                        <span
+                            v-if="customer.city_label || customer.area_label"
+                            class="flex items-center gap-1 text-muted-foreground rtl:flex-row-reverse"
+                        >
+                            <MapPin class="h-3.5 w-3.5 shrink-0" aria-hidden />
+                            <span>
+                                <template v-if="customer.city_label">{{ customer.city_label }}</template>
+                                <template v-if="customer.area_label"> · {{ customer.area_label }}</template>
+                            </span>
+                        </span>
                     </div>
                 </div>
 

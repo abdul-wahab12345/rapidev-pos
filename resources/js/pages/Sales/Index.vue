@@ -142,8 +142,11 @@ function paymentMethodLabel(method: string) {
 }
 
 function saleStatusLabel(st: SaleRow['status']) {
-    if (st === 'completed') return t('common.completed');
-    if (st === 'voided') return t('sales.voided');
+    if (st === 'completed')          return t('common.completed');
+    if (st === 'voided')             return t('sales.voided');
+    if (st === 'partially_returned') return t('sales.partiallyReturned');
+    if (st === 'returned')           return t('sales.returned');
+    if (st === 'pending')            return t('sales.pendingSale');
     return st;
 }
 </script>
@@ -334,7 +337,7 @@ function saleStatusLabel(st: SaleRow['status']) {
                                     <!-- Print -->
                                     <button
                                         @click="printSale(sale)"
-                                        :disabled="printingId === sale.id"
+                                        :disabled="printingId !== null"
                                         class="flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground hover:border-foreground/30 hover:text-foreground transition-colors disabled:opacity-40"
                                         :title="t('sales.printReceiptTitle')"
                                     >

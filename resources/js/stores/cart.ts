@@ -48,6 +48,10 @@ export const useCartStore = defineStore('cart', () => {
     const jazzcashAmount = ref(0);
     const easypaisaAmount = ref(0);
 
+    // Rate list
+    const selectedRateListId = ref<string | null>(null);
+    const rateListPrices = ref<Record<string, number>>({}); // key: "productId_variantId"
+
     // UI state
     const showPaymentModal = ref(false);
     const showCustomerPanel = ref(false);
@@ -105,8 +109,28 @@ export const useCartStore = defineStore('cart', () => {
     });
 
     // ── Actions ────────────────────────────────────────────
+    function getRatePrice(productId: string, variantId: string | null): number | null {
+        const key = `${productId}_${variantId ?? ''}`;
+        return rateListPrices.value[key] ?? null;
+    }
+
+    function setRateList(id: string | null, prices: Record<string, number>) {
+        selectedRateListId.value = id;
+        rateListPrices.value = prices;
+        // Re-price all current cart items under the new rate list
+        items.value.forEach((item) => {
+            const ratePrice = getRatePrice(item.product_id, item.variant_id);
+            if (ratePrice !== null) {
+                item.unit_price = ratePrice;
+            }
+        });
+    }
+
     function addItem(product: CartProduct, variantId: string | null = null, variantLabel: string | null = null) {
         saleComplete.value = false;
+        const ratePrice = getRatePrice(product.id, variantId);
+        const unitPrice = ratePrice !== null ? ratePrice : product.selling_price;
+
         const existing = items.value.find(
             (i) => i.product_id === product.id && i.variant_id === variantId,
         );
@@ -119,7 +143,7 @@ export const useCartStore = defineStore('cart', () => {
                 name: product.name,
                 name_ur: product.name_ur ?? null,
                 variant_label: variantLabel,
-                unit_price: product.selling_price,
+                unit_price: unitPrice,
                 cost_price: product.cost_price,
                 quantity: 1,
                 discount: 0,
@@ -155,6 +179,7 @@ export const useCartStore = defineStore('cart', () => {
         saleComplete.value = false;
         lastSale.value = null;
         showPaymentModal.value = false;
+        // Keep rate list selection across sales
     }
 
     function buildSalePayload(notes?: string) {
@@ -187,6 +212,7 @@ export const useCartStore = defineStore('cart', () => {
             },
             discount: cartDiscount.value,
             notes: notes,
+            rate_list_id: selectedRateListId.value ?? null,
         };
     }
 
@@ -198,6 +224,8 @@ export const useCartStore = defineStore('cart', () => {
         cashReceived,
         jazzcashAmount,
         easypaisaAmount,
+        selectedRateListId,
+        rateListPrices,
         showPaymentModal,
         showCustomerPanel,
         saleComplete,
@@ -216,5 +244,7 @@ export const useCartStore = defineStore('cart', () => {
         setItemDiscount,
         clearCart,
         buildSalePayload,
+        setRateList,
+        getRatePrice,
     };
 });
