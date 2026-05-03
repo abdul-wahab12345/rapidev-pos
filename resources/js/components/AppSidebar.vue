@@ -16,6 +16,7 @@ import { Link, usePage } from '@inertiajs/vue3';
 import {
     BarChart3,
     BookOpen,
+    ClipboardList,
     CreditCard,
     DollarSign,
     Gauge,
@@ -89,6 +90,7 @@ const navGroups = [
             { titleKey: 'nav.accounts', href: '/accounts', icon: DollarSign },
             { titleKey: 'nav.generalLedger', href: '/accounts/ledger', icon: ScrollText },
             { titleKey: 'nav.receivablesPayables', href: '/accounts/receivables', icon: CreditCard },
+            { titleKey: 'nav.businessReports', href: '/reports', icon: ClipboardList },
             { titleKey: 'nav.reports', href: '/accounts/reports', icon: BarChart3 },
             { titleKey: 'nav.expenses', href: '/expenses', icon: Wallet },
         ],

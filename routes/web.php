@@ -5,6 +5,7 @@ use App\Http\Controllers\BusinessSettingsController;
 use App\Http\Controllers\Customers\CustomersController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Expenses\ExpenseController;
+use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\Inventory\ProductController;
 use App\Http\Controllers\Inventory\StockController;
 use App\Http\Controllers\Locations\LocationsController;
@@ -12,8 +13,8 @@ use App\Http\Controllers\Parties\PartyController;
 use App\Http\Controllers\Pos\PosController;
 use App\Http\Controllers\Purchasing\PurchaseOrderController;
 use App\Http\Controllers\Purchasing\SupplierController;
-use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\RateLists\RateListController;
+use App\Http\Controllers\Reports\OperationalReportsController;
 use App\Http\Controllers\Returns\ReturnController;
 use App\Http\Controllers\Sales\SalesController;
 use Illuminate\Support\Facades\Route;
@@ -97,6 +98,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/reports', [AccountsController::class, 'reports'])->name('reports');
         Route::get('/ledger', [AccountsController::class, 'ledger'])->name('ledger');
         Route::get('/receivables', [AccountsController::class, 'receivables'])->name('receivables');
+    });
+
+    // ── Business / operational reports (lists & summaries, not statutory P&L) ──
+    Route::prefix('reports')->name('reports.')->group(function () {
+        Route::get('/', [OperationalReportsController::class, 'index'])->name('index');
+        Route::get('/udhaar-customers', [OperationalReportsController::class, 'udhaarCustomers'])->name('udhaar-customers');
+        Route::get('/payable-vendors', [OperationalReportsController::class, 'payableVendors'])->name('payable-vendors');
+        Route::get('/customers-by-location', [OperationalReportsController::class, 'customersByLocation'])->name('customers-by-location');
+        Route::get('/sales-summary', [OperationalReportsController::class, 'salesSummary'])->name('sales-summary');
     });
 
     // ── Purchasing ─────────────────────────────────────────

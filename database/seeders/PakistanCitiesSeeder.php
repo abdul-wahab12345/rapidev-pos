@@ -4,9 +4,12 @@ namespace Database\Seeders;
 
 use App\Models\City;
 use Illuminate\Database\Seeder;
+use JsonException;
 
 /**
  * Pakistan cities for address pickers — grouped by ICT + provinces; GB/AJK retain district centres from prior seed.
+ *
+ * Urdu labels are read from `database/data/pakistan_cities_ur.json` (province → English name → Urdu).
  *
  * Punjab–Balochistan block matches the project's reference city list (with spelling / casing normalization).
  */
@@ -22,6 +25,18 @@ class PakistanCitiesSeeder extends Seeder
         $order = 0;
         $now = now();
 
+        $path = database_path('data/pakistan_cities_ur.json');
+        /** @var array<string, array<string, string>> */
+        $urduMap = [];
+        if (is_readable($path)) {
+            try {
+                $decoded = json_decode(file_get_contents($path), true, 512, JSON_THROW_ON_ERROR);
+                $urduMap = is_array($decoded) ? $decoded : [];
+            } catch (JsonException) {
+                // Seed English names only if JSON is invalid.
+            }
+        }
+
         foreach ($this->districtsByProvince() as $province => $names) {
             $names = array_values(array_unique($names));
 
@@ -31,6 +46,7 @@ class PakistanCitiesSeeder extends Seeder
                 }
                 $batch[] = [
                     'name' => $name,
+                    'name_ur' => $urduMap[$province][$name] ?? null,
                     'province' => $province,
                     'sort_order' => $order++,
                     'created_at' => $now,

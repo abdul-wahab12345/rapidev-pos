@@ -8,6 +8,8 @@ export interface SearchableOption {
     value: string | number;
     label: string;
     subtitle?: string;
+    /** Extra text matched by the dropdown filter only (not shown). E.g. English name when label is localized. */
+    keywords?: string;
     disabled?: boolean;
 }
 
@@ -59,7 +61,8 @@ const filtered = computed(() => {
     return props.options.filter((o) => {
         const ln = normalized(o.label);
         const sn = o.subtitle ? normalized(o.subtitle) : '';
-        return ln.includes(q) || sn.includes(q);
+        const kw = o.keywords ? normalized(o.keywords) : '';
+        return ln.includes(q) || sn.includes(q) || (kw.length > 0 && kw.includes(q));
     });
 });
 

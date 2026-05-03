@@ -15,6 +15,7 @@ import { useI18n } from 'vue-i18n';
 interface CityLite {
     id: number;
     name: string;
+    name_ur?: string | null;
     province: string;
 }
 
@@ -23,6 +24,7 @@ interface AreaRow {
     name: string;
     city_id: number;
     city_name: string;
+    city_name_ur?: string | null;
     province: string;
 }
 
@@ -33,7 +35,7 @@ const props = defineProps<{
     filters: { province?: string; search?: string };
 }>();
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const { confirm } = useConfirm();
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
@@ -61,10 +63,15 @@ watch([provinceFilter, search], () => {
 const cityOptions = computed<SearchableOption[]>(() =>
     props.cities.map((c) => ({
         value: c.id,
-        label: c.name,
+        label: locale.value === 'ur' && c.name_ur ? c.name_ur : c.name,
         subtitle: c.province,
+        keywords: [c.name, c.name_ur ?? '', c.province].filter(Boolean).join(' '),
     })),
 );
+
+function displayCityName(row: AreaRow): string {
+    return locale.value === 'ur' && row.city_name_ur ? row.city_name_ur : row.city_name;
+}
 
 const modalOpen = ref(false);
 const editTarget = ref<AreaRow | null>(null);
@@ -190,7 +197,7 @@ async function removeArea(row: AreaRow) {
                         <div class="min-w-0 flex-1">
                             <p class="font-semibold text-foreground">{{ row.name }}</p>
                             <p class="text-xs text-muted-foreground mt-0.5">
-                                {{ row.city_name }} · <span class="tabular-nums">{{ row.province }}</span>
+                                {{ displayCityName(row) }} · <span class="tabular-nums">{{ row.province }}</span>
                             </p>
                         </div>
                         <div class="flex gap-1 shrink-0">

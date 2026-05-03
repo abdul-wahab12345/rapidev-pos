@@ -26,7 +26,7 @@ interface CustomerData {
 
 const props = defineProps<{ customer: CustomerData | null }>();
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 const isEdit = !!props.customer?.id;
 
@@ -51,12 +51,16 @@ const cityOptions = ref<SearchableOption[]>([]);
 const areaOptions = ref<SearchableOption[]>([]);
 const areasBusy = ref(false);
 
-onMounted(async () => {
+async function loadCityOptions() {
     try {
-        cityOptions.value = await fetchCitySearchOptions();
+        cityOptions.value = await fetchCitySearchOptions(locale.value);
     } catch {
         cityOptions.value = [];
     }
+}
+
+onMounted(async () => {
+    await loadCityOptions();
 
     const cid = form.city_id;
     if (cid) {
@@ -67,6 +71,10 @@ onMounted(async () => {
             areasBusy.value = false;
         }
     }
+});
+
+watch(locale, () => {
+    void loadCityOptions();
 });
 
 watch(

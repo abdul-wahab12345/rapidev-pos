@@ -32,7 +32,7 @@ defineProps<{
             <div
                 v-if="icon"
                 :class="[
-                    'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
+                    'print-hide flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
                     tone === 'success' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' :
                     tone === 'warning' ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400' :
                     tone === 'danger'  ? 'bg-red-500/10 text-red-600 dark:text-red-400' :

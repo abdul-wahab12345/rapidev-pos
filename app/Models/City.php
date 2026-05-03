@@ -8,12 +8,22 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class City extends Model
 {
     protected $fillable = [
-        'name', 'province', 'sort_order',
+        'name', 'name_ur', 'province', 'sort_order',
     ];
 
     protected $casts = [
         'sort_order' => 'integer',
     ];
+
+    /** Urdu when $language is `ur` and `name_ur` is set; otherwise English `name`. */
+    public function localizedName(?string $language = null): string
+    {
+        $language ??= 'en';
+
+        return $language === 'ur' && $this->name_ur !== null && $this->name_ur !== ''
+            ? $this->name_ur
+            : $this->name;
+    }
 
     public function areas(): HasMany
     {

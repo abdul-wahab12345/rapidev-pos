@@ -8,6 +8,7 @@ use App\Models\City;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -18,18 +19,18 @@ class LocationsController extends Controller
     public function index(Request $request): Response
     {
         $province = $request->string('province')->trim()->value();
-        $search   = $request->string('search')->trim()->value();
+        $search = $request->string('search')->trim()->value();
 
-        $citiesQuery = City::query()->select(['id', 'name', 'province'])->orderBy('province')->orderBy('name');
+        $citiesQuery = City::query()->select(['id', 'name', 'name_ur', 'province'])->orderBy('province')->orderBy('name');
         if ($province !== '') {
             $citiesQuery->where('province', $province);
         }
 
-        /** @var \Illuminate\Support\Collection<int,\App\Models\City> */
+        /** @var Collection<int,City> */
         $cities = $citiesQuery->get();
 
         $areaQuery = Area::query()
-            ->with(['city:id,name,province'])
+            ->with(['city:id,name,name_ur,province'])
             ->orderBy('city_id')
             ->orderBy('name');
 
@@ -42,36 +43,38 @@ class LocationsController extends Controller
             $areaQuery->whereRaw('LOWER(name) LIKE ?', ["%{$lower}%"]);
         }
 
-        /** @var \Illuminate\Support\Collection<int,\App\Models\Area> */
+        /** @var Collection<int,Area> */
         $areas = $areaQuery->get();
 
         return Inertia::render('Locations/Index', [
-            'cities'        => $cities,
-            'areas'         => $areas->map(fn (Area $a) => [
-                'id'         => $a->id,
-                'name'       => $a->name,
-                'city_id'    => $a->city_id,
-                'city_name'  => $a->city->name ?? '',
-                'province'   => $a->city->province ?? '',
+            'cities' => $cities,
+            'areas' => $areas->map(fn (Area $a) => [
+                'id' => $a->id,
+                'name' => $a->name,
+                'city_id' => $a->city_id,
+                'city_name' => $a->city->name ?? '',
+                'city_name_ur' => $a->city->name_ur ?? null,
+                'province' => $a->city->province ?? '',
             ]),
-            'provinces'     => City::query()->select('province')->distinct()->orderBy('province')->pluck('province'),
-            'filters'       => compact('province', 'search'),
+            'provinces' => City::query()->select('province')->distinct()->orderBy('province')->pluck('province'),
+            'filters' => compact('province', 'search'),
         ]);
     }
 
     public function citiesJson(): JsonResponse
     {
-        $rows = City::query()->select(['id', 'name', 'province'])
+        $rows = City::query()->select(['id', 'name', 'name_ur', 'province'])
             ->orderBy('province')
             ->orderBy('name')
             ->get();
 
         return response()->json([
             'data' => $rows->map(fn (City $c) => [
-                'id'        => $c->id,
-                'name'      => $c->name,
-                'province'  => $c->province,
-                'subtitle'  => $c->province,
+                'id' => $c->id,
+                'name' => $c->name,
+                'name_ur' => $c->name_ur,
+                'province' => $c->province,
+                'subtitle' => $c->province,
             ]),
         ]);
     }
@@ -97,13 +100,13 @@ class LocationsController extends Controller
 
         $validated = $request->validate([
             'city_id' => ['required', 'integer', Rule::exists('cities', 'id')],
-            'name'    => ['required', 'string', 'max:120'],
+            'name' => ['required', 'string', 'max:120'],
         ]);
 
         Area::create([
             'tenant_id' => $tenantId,
-            'city_id'   => (int) $validated['city_id'],
-            'name'      => $validated['name'],
+            'city_id' => (int) $validated['city_id'],
+            'name' => $validated['name'],
         ]);
 
         return back()->with('success', 'Area added.');

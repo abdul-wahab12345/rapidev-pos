@@ -30,7 +30,7 @@ import {
 import { computed, onMounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 
-const { t } = useI18n();
+const { t, locale } = useI18n();
 const { confirm } = useConfirm();
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
@@ -88,12 +88,20 @@ const areasBusy = ref(false);
 
 let searchTimer: ReturnType<typeof setTimeout>;
 
-onMounted(async () => {
+async function loadCityOptions() {
     try {
-        cityOptions.value = await fetchCitySearchOptions();
+        cityOptions.value = await fetchCitySearchOptions(locale.value);
     } catch {
         cityOptions.value = [];
     }
+}
+
+onMounted(async () => {
+    await loadCityOptions();
+});
+
+watch(locale, () => {
+    void loadCityOptions();
 });
 
 watch(search, () => {

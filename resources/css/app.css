@@ -144,3 +144,52 @@ html[lang='ur'] option {
         font-weight: 500;
     }
 }
+
+/* Tight sheet margins (1.5mm); avoid browser default ~½in sides. */
+@page {
+    margin: 1.5mm;
+}
+
+/* Sidebar + UI chrome marked .print-hide; browser print uses tenant lang/dir from <html>. */
+@media print {
+    [data-sidebar='sidebar'],
+    [data-sidebar='rail'] {
+        display: none !important;
+    }
+
+    .print-hide {
+        display: none !important;
+    }
+
+    body {
+        background: #fff !important;
+        color: #000 !important;
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+    }
+
+    /* Inset sidebar layout adds screen margin/shadow — remove when printing operational reports */
+    body:has(.reports-print-root) main {
+        margin: 0 !important;
+        min-height: 0 !important;
+        padding: 0 !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+    }
+
+    .reports-print-root {
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+        max-width: none !important;
+        width: 100% !important;
+    }
+
+    /* Operational reports: hide link columns that only exist for on-screen drilling (e.g. View / دیکھیں). */
+    [data-report-table-actions-cell] {
+        display: none !important;
+    }
+}
