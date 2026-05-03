@@ -49,7 +49,10 @@ const listRef = ref<HTMLElement | null>(null);
 const inputRef = ref<HTMLInputElement | null>(null);
 const highlighted = ref(-1);
 
-const normalized = (s: string) => s.normalize('NFKD').toLowerCase();
+const normalized = (s: string) =>
+    String(s ?? '')
+        .normalize('NFKD')
+        .toLowerCase();
 
 const selectedOption = computed(() =>
     props.options.find((o) => String(o.value) === String(props.modelValue ?? '')),

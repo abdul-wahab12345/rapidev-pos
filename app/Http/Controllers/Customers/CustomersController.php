@@ -377,9 +377,19 @@ class CustomersController extends Controller
 
     public function enableSupplier(Customer $customer): RedirectResponse
     {
+        LocationsController::assertAreaMatchesCityTenant(
+            $customer->city_id ? (int) $customer->city_id : null,
+            $customer->area_id ? (int) $customer->area_id : null,
+            (string) $customer->tenant_id
+        );
+
+        $cityLabel = $customer->city_id
+            ? City::find((int) $customer->city_id)?->name
+            : null;
+
         if (! $customer->party_id) {
             // Backfill a party for legacy customers that pre-date this feature
-            $party = DB::transaction(function () use ($customer) {
+            $party = DB::transaction(function () use ($customer, $cityLabel) {
                 $p = Party::create([
                     'tenant_id' => $customer->tenant_id,
                     'name' => $customer->name,
@@ -387,6 +397,7 @@ class CustomersController extends Controller
                     'cnic' => $customer->cnic,
                     'address' => $customer->address,
                     'notes' => $customer->notes,
+                    'city' => $cityLabel,
                     'is_customer' => true,
                     'is_supplier' => true,
                 ]);
@@ -397,25 +408,54 @@ class CustomersController extends Controller
         } else {
             $party = $customer->party;
             if ($party->is_supplier && $party->supplier()->withTrashed()->exists()) {
-                $party->supplier()->withTrashed()->restore();
-                $party->update(['is_supplier' => true]);
+                /** @var Supplier $supplier */
+                $supplier = $party->supplier()->withTrashed()->firstOrFail();
+                $supplier->restore();
+
+                $party->update([
+                    'is_supplier' => true,
+                    'city' => $cityLabel,
+                ]);
+
+                $supplier->update($this->supplierSyncAttributesFromCustomer($customer, $cityLabel));
 
                 return back()->with('success', "{$customer->name} re-enabled as a supplier.");
             }
-            $party->update(['is_supplier' => true]);
+            $party->update([
+                'is_supplier' => true,
+                'city' => $cityLabel,
+            ]);
         }
 
-        Supplier::create([
-            'tenant_id' => $customer->tenant_id,
-            'party_id' => $customer->party_id ?? $party->id,
-            'name' => $customer->name,
-            'phone' => $customer->phone,
-            'opening_balance' => 0,
-            'current_balance' => 0,
-            'is_active' => true,
-        ]);
+        Supplier::create(array_merge(
+            [
+                'tenant_id' => $customer->tenant_id,
+                'party_id' => $customer->party_id ?? $party->id,
+                'name' => $customer->name,
+                'phone' => $customer->phone,
+                'opening_balance' => 0,
+                'current_balance' => 0,
+                'is_active' => true,
+            ],
+            $this->supplierSyncAttributesFromCustomer($customer, $cityLabel)
+        ));
 
         return back()->with('success', "{$customer->name} is now also a supplier.");
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function supplierSyncAttributesFromCustomer(Customer $customer, ?string $cityLabel): array
+    {
+        return [
+            'address' => $customer->address,
+            'cnic' => $customer->cnic,
+            'notes' => $customer->notes,
+            'city' => $cityLabel,
+            'city_id' => $customer->city_id,
+            'area_id' => $customer->area_id,
+        ];
     }
 
     public function disableSupplier(Customer $customer): RedirectResponse
