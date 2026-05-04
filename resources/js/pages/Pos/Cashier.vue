@@ -217,6 +217,15 @@ const discountLabel = computed(() => {
     return discountType.value === 'percent' ? `${discountInput.value}%` : `Rs ${discountInput.value}`;
 });
 
+/** Gross extension (qty × unit) before line-level PKR discounts */
+const cartGoodsGross = computed(() =>
+    cart.items.reduce((s, i) => s + Number(i.unit_price) * Number(i.quantity), 0),
+);
+
+const cartLineDiscountsSum = computed(() =>
+    cart.items.reduce((s, i) => s + cart.lineDiscountTotal(i), 0),
+);
+
 watch([discountInput, discountType], () => {
     cart.cartDiscount = discountType.value === 'percent'
         ? (cart.subtotal * Math.min(discountInput.value, 100)) / 100
@@ -234,11 +243,12 @@ const itemDiscountInput = ref(0);
 function toggleExpandItem(idx: number) {
     if (expandedItemIdx.value === idx) { expandedItemIdx.value = null; return; }
     expandedItemIdx.value = idx;
-    itemDiscountInput.value = cart.items[idx]?.discount ?? 0;
+    itemDiscountInput.value = cart.items[idx]?.discount_per_unit ?? 0;
 }
 
 function applyItemDiscount(idx: number) {
-    cart.setItemDiscount(idx, Math.max(0, itemDiscountInput.value));
+    const raw = Number(itemDiscountInput.value);
+    cart.setItemDiscount(idx, Math.round(Math.max(0, raw) * 100) / 100);
     expandedItemIdx.value = null;
 }
 
@@ -317,8 +327,8 @@ function printReceipt() {
             variant_label: item.variant_label,
             quantity:      item.quantity,
             unit_price:    item.unit_price,
-            line_total:    (item.unit_price * item.quantity) - item.discount,
-            discount:      item.discount,
+            line_total: (item.unit_price * item.quantity) - cart.lineDiscountTotal(item),
+            discount: cart.lineDiscountTotal(item),
         })),
         subtotal:         cart.subtotal,
         discount:         cart.cartDiscount,
@@ -637,15 +647,15 @@ onUnmounted(() => window.removeEventListener('keydown', handleKey));
                         class="mb-1.5 rounded-xl border border-border bg-background px-3 py-2.5"
                     >
                         <!-- Main row -->
-                        <div class="flex items-center gap-2">
-                            <div class="min-w-0 flex-1">
+                        <div class="flex flex-wrap items-center gap-x-2 gap-y-2 sm:flex-nowrap">
+                            <div class="min-w-0 flex-1 basis-[55%] sm:basis-auto">
                                 <p class="truncate text-[13px] font-medium text-foreground">{{ item.name }}</p>
                                 <p v-if="item.name_ur" class="truncate text-[12px] text-muted-foreground leading-tight" dir="rtl">{{ item.name_ur }}</p>
                                 <p v-if="item.variant_label" class="text-xs text-muted-foreground">{{ item.variant_label }}</p>
                                 <div class="mt-0.5 flex items-center gap-2">
                                     <span class="text-xs text-muted-foreground">{{ fmt(item.unit_price) }}</span>
-                                    <span v-if="item.discount > 0" class="flex items-center gap-0.5 text-[11px] text-green-600 dark:text-green-400">
-                                        <Tag class="h-2.5 w-2.5" /> −{{ fmt(item.discount) }}
+                                    <span v-if="item.discount_per_unit > 0" class="flex items-center gap-0.5 text-[11px] text-green-600 dark:text-green-400">
+                                        <Tag class="h-2.5 w-2.5" /> −{{ fmt(cart.lineDiscountTotal(item)) }}
                                     </span>
                                 </div>
                             </div>
@@ -669,20 +679,20 @@ onUnmounted(() => window.removeEventListener('keydown', handleKey));
                             </div>
 
                             <!-- Line total + disc toggle -->
-                            <div class="flex w-20 shrink-0 flex-col items-end">
+                            <div class="ms-auto flex min-w-[5rem] shrink-0 flex-col items-end">
                                 <span class="text-[13px] font-semibold text-foreground">
-                                    {{ fmt((item.unit_price * item.quantity) - item.discount) }}
+                                    {{ fmt(item.unit_price * item.quantity - cart.lineDiscountTotal(item)) }}
                                 </span>
                                 <!-- ★ Item discount toggle button ★ -->
                                 <button
                                     @click="toggleExpandItem(idx)"
                                     :class="[
                                         'mt-0.5 flex items-center gap-0.5 text-[11px] transition-colors',
-                                        item.discount > 0 ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground hover:text-primary',
+                                        item.discount_per_unit > 0 ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground hover:text-primary',
                                     ]"
                                 >
                                     <Tag class="h-2.5 w-2.5" />
-                                    {{ item.discount > 0 ? t('pos.editDisc') : t('pos.addDisc') }}
+                                    {{ item.discount_per_unit > 0 ? t('pos.editDisc') : t('pos.addDisc') }}
                                 </button>
                             </div>
                         </div>
@@ -694,7 +704,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKey));
                                 v-model.number="itemDiscountInput"
                                 type="number"
                                 min="0"
-                                :max="item.unit_price * item.quantity"
+                                :max="item.unit_price"
                                 class="w-24 rounded-lg border border-input bg-background px-2 py-1 text-right text-xs focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
                                 @keydown.enter="applyItemDiscount(idx)"
                             />
@@ -710,10 +720,26 @@ onUnmounted(() => window.removeEventListener('keydown', handleKey));
 
                 <!-- Totals -->
                 <div class="space-y-1 text-[13px]">
-                    <div class="flex justify-between text-muted-foreground">
-                        <span>{{ t('common.subtotal') }}</span>
-                        <span class="text-foreground">{{ fmt(cart.subtotal) }}</span>
-                    </div>
+                    <template v-if="cartLineDiscountsSum <= 0">
+                        <div class="flex justify-between text-muted-foreground">
+                            <span>{{ t('common.subtotal') }}</span>
+                            <span class="text-foreground">{{ fmt(cart.subtotal) }}</span>
+                        </div>
+                    </template>
+                    <template v-else>
+                        <div class="flex justify-between text-muted-foreground">
+                            <span>{{ t('pos.goodsTotal') }}</span>
+                            <span class="text-foreground">{{ fmt(cartGoodsGross) }}</span>
+                        </div>
+                        <div class="flex justify-between text-green-600 dark:text-green-400">
+                            <span>{{ t('pos.lineDiscountItems') }}</span>
+                            <span>−{{ fmt(cartLineDiscountsSum) }}</span>
+                        </div>
+                        <div class="flex justify-between border-t border-border pt-1 text-muted-foreground">
+                            <span>{{ t('common.subtotal') }}</span>
+                            <span class="text-foreground">{{ fmt(cart.subtotal) }}</span>
+                        </div>
+                    </template>
 
                     <!-- ★ Discount toggle row ★ -->
                     <div class="flex items-center justify-between">
@@ -916,14 +942,41 @@ onUnmounted(() => window.removeEventListener('keydown', handleKey));
                         <pre class="whitespace-pre-wrap font-sans">{{ stockError }}</pre>
                     </div>
 
-                    <div class="max-h-40 space-y-1.5 overflow-y-auto text-sm">
-                        <div v-for="item in cart.items" :key="item.product_id" class="flex justify-between text-muted-foreground">
-                            <span class="me-4 truncate">{{ item.name }} × {{ item.quantity }}</span>
-                            <span class="shrink-0 font-medium text-foreground">{{ fmt((item.unit_price * item.quantity) - item.discount) }}</span>
+                    <div class="max-h-48 space-y-2 overflow-y-auto text-sm">
+                        <div
+                            v-for="(item, modalIdx) in cart.items"
+                            :key="`${item.product_id}-${item.variant_id ?? 'x'}-${modalIdx}`"
+                            class="border-b border-border/60 pb-2 last:border-0 last:pb-0"
+                        >
+                            <div class="flex justify-between gap-2 font-medium text-foreground">
+                                <span class="min-w-0 flex-1 truncate">{{ item.name }} × {{ item.quantity }}</span>
+                                <span class="shrink-0">{{ fmt(item.unit_price * item.quantity - cart.lineDiscountTotal(item)) }}</span>
+                            </div>
+                            <div
+                                v-if="cart.lineDiscountTotal(item) > 0"
+                                class="mt-1 flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground"
+                            >
+                                <span>{{ t('pos.paymentLineGross') }} {{ fmt(item.unit_price * item.quantity) }}</span>
+                                <span class="text-green-600 dark:text-green-400">{{ t('sales.discountLine', { amount: fmt(cart.lineDiscountTotal(item)) }) }}</span>
+                            </div>
                         </div>
                     </div>
 
                     <div class="mt-3 border-t border-border pt-3 text-sm">
+                        <template v-if="cartLineDiscountsSum > 0">
+                            <div class="flex justify-between text-muted-foreground">
+                                <span>{{ t('pos.goodsTotal') }}</span>
+                                <span class="tabular-nums text-foreground">{{ fmt(cartGoodsGross) }}</span>
+                            </div>
+                            <div class="mt-0.5 flex justify-between text-green-600 dark:text-green-400">
+                                <span>{{ t('pos.lineDiscountItems') }}</span>
+                                <span>−{{ fmt(cartLineDiscountsSum) }}</span>
+                            </div>
+                            <div class="mt-1 flex justify-between text-muted-foreground">
+                                <span>{{ t('common.subtotal') }}</span>
+                                <span class="tabular-nums text-foreground">{{ fmt(cart.subtotal) }}</span>
+                            </div>
+                        </template>
                         <div v-if="cart.cartDiscount > 0" class="flex justify-between text-green-600 dark:text-green-400">
                             <span>{{ t('common.discount') }}</span><span>−{{ fmt(cart.cartDiscount) }}</span>
                         </div>

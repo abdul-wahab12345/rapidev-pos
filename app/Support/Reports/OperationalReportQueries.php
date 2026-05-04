@@ -24,11 +24,12 @@ final class OperationalReportQueries
         $rows = PurchaseOrder::query()
             ->whereIn('supplier_id', $supplierIds->all())
             ->whereIn('status', ['ordered', 'partial', 'received'])
+            ->withSum('supplierReturns', 'total_amount')
             ->get(['supplier_id', 'total', 'paid_amount']);
 
         $out = [];
         foreach ($rows as $po) {
-            $due = max(0, (float) $po->total - (float) $po->paid_amount);
+            $due = $po->amountDue();
             $out[$po->supplier_id] = ($out[$po->supplier_id] ?? 0) + $due;
         }
 
@@ -128,15 +129,12 @@ final class OperationalReportQueries
 
         $poDue = self::purchaseOrderDueBySupplierIds($supplierIdList);
 
-        return $suppliers->map(function ($s) use ($poDue) {
-            $oldestPo = PurchaseOrder::query()
-                ->where('supplier_id', $s->id)
-                ->whereIn('status', ['ordered', 'partial', 'received'])
-                ->whereRaw('paid_amount < total')
-                ->orderBy('order_date')
-                ->value('order_date');
+        $oldestDueBySupplier = PurchaseOrder::oldestDueOrderDatesBySupplierIds($supplierIdList);
 
-            $ageDays = $oldestPo !== null ? (int) max(0, now()->startOfDay()->diffInDays(Carbon::parse($oldestPo)->startOfDay())) : null;
+        return $suppliers->map(function ($s) use ($poDue, $oldestDueBySupplier) {
+            $oldestPo = $oldestDueBySupplier[(string) $s->id] ?? null;
+
+            $ageDays = $oldestPo !== null ? (int) max(0, now()->startOfDay()->diffInDays($oldestPo->copy()->startOfDay())) : null;
 
             $ap = (float) $s->current_balance;
             $ar = (float) ($s->party?->customer?->current_balance ?? 0);

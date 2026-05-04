@@ -47,11 +47,7 @@ class DashboardController extends Controller
             ->whereDate('created_at', $today)
             ->count();
 
-        $purchaseDue = (float) PurchaseOrder::query()
-            ->where('tenant_id', $tenantId)
-            ->whereIn('status', ['received', 'partial', 'ordered'])
-            ->selectRaw('COALESCE(SUM(total - paid_amount), 0) as due')
-            ->value('due');
+        $purchaseDue = PurchaseOrder::openAmountDueAggregate($tenantId);
 
         $pendingPoCount = PurchaseOrder::where('tenant_id', $tenantId)
             ->whereIn('status', ['draft', 'ordered', 'partial'])

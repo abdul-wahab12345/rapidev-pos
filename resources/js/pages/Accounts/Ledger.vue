@@ -1,8 +1,14 @@
 <script setup lang="ts">
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/AppLayout.vue';
+import {
+    formatJournalReferenceFallback,
+    journalReferenceBadge,
+    type JournalRefBadgeVariant,
+} from '@/constants/badges';
 import { formatMoney } from '@/utils/format';
 import type { BreadcrumbItem } from '@/types';
 import { Head, router } from '@inertiajs/vue3';
@@ -71,16 +77,20 @@ function accountTypeLabel(type: string) {
     return path ? t(path as 'accounts.assetType') : type;
 }
 
-function ledgerRefLabel(referenceType: string | null | undefined) {
-    const key = referenceType ?? 'manual';
-    const map: Record<string, () => string> = {
-        manual: () => t('accounts.refManual'),
-        sale: () => t('badges.sale'),
-        payment: () => t('badges.payment'),
-        expense: () => t('accounts.refExpense'),
-        void: () => t('badges.void'),
+function ledgerReferenceRow(refType: string | null | undefined): {
+    variant: JournalRefBadgeVariant;
+    text: string;
+} {
+    const key = refType && refType.trim() !== '' ? refType : 'manual';
+    const def = journalReferenceBadge[key];
+    if (def) {
+        return { variant: def.variant, text: t(def.labelKey) };
+    }
+
+    return {
+        variant: 'outline',
+        text: formatJournalReferenceFallback(key),
     };
-    return map[key]?.() ?? key;
 }
 
 const typeStyle: Record<string, { bg: string; text: string }> = {
@@ -91,13 +101,15 @@ const typeStyle: Record<string, { bg: string; text: string }> = {
     expense:   { bg: 'bg-amber-500/10',   text: 'text-amber-600 dark:text-amber-400' },
 };
 
-const refBadge: Record<string, string> = {
-    sale:    'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-    void:    'bg-red-500/10 text-red-500',
-    payment: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-    manual:  'bg-muted text-muted-foreground',
-    expense: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-};
+const linesDisplayed = computed(() => {
+    // Re-resolve labels when UI language changes
+    void locale.value;
+
+    return props.lines.map((line) => ({
+        ...line,
+        refBadge: ledgerReferenceRow(line.reference_type),
+    }));
+});
 
 const closingBalance = computed(() =>
     props.lines.length > 0
@@ -204,23 +216,24 @@ const totalCredit = computed(() => props.lines.reduce((s, l) => s + l.credit, 0)
                                 </td>
                             </tr>
 
-                            <tr v-if="lines.length === 0">
+                            <tr v-if="linesDisplayed.length === 0">
                                 <td colspan="7" class="px-4 py-10 text-center text-muted-foreground">
                                     {{ selected_account ? t('accounts.noTransactionsInPeriod') : t('accounts.selectAccountToView') }}
                                 </td>
                             </tr>
 
                             <tr
-                                v-for="(line, i) in lines" :key="i"
+                                v-for="(line, i) in linesDisplayed"
+                                :key="i"
                                 class="hover:bg-muted/20 transition-colors [&>td]:align-middle"
                             >
                                 <td class="px-4 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{{ fmtDate(line.entry_date) }}</td>
                                 <td class="px-4 py-2.5 font-mono text-xs text-muted-foreground">{{ line.entry_number }}</td>
                                 <td class="px-4 py-2.5 text-foreground">{{ line.description }}</td>
                                 <td class="px-4 py-2.5 text-center whitespace-nowrap align-middle">
-                                    <span :class="['inline-flex items-center justify-center whitespace-nowrap text-[10px] px-2 py-0.5 rounded-full font-medium', refBadge[line.reference_type ?? 'manual'] ?? refBadge.manual]">
-                                        {{ ledgerRefLabel(line.reference_type) }}
-                                    </span>
+                                    <Badge :variant="line.refBadge.variant" class="text-[11px] font-semibold">
+                                        {{ line.refBadge.text }}
+                                    </Badge>
                                 </td>
                                 <td class="px-4 py-2.5 text-end tabular-nums text-emerald-600 dark:text-emerald-400 font-medium">
                                     {{ line.debit > 0 ? formatMoney(line.debit) : '—' }}

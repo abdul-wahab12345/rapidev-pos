@@ -4,8 +4,12 @@ namespace App\Http\Controllers\Accounts;
 
 use App\Http\Controllers\Controller;
 use App\Models\Account;
+use App\Models\Customer;
 use App\Models\JournalEntry;
 use App\Models\JournalLine;
+use App\Models\PurchaseOrder;
+use App\Models\Sale;
+use App\Models\Supplier;
 use App\Services\DefaultChartOfAccounts;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -29,13 +33,13 @@ class AccountsController extends Controller
             ->get()
             ->groupBy('type')
             ->map(fn ($group) => $group->map(fn ($a) => [
-                'id'          => $a->id,
-                'code'        => $a->code,
-                'name'        => $a->name,
-                'type'        => $a->type,
-                'sub_type'    => $a->sub_type,
-                'is_system'   => $a->is_system,
-                'is_active'   => $a->is_active,
+                'id' => $a->id,
+                'code' => $a->code,
+                'name' => $a->name,
+                'type' => $a->type,
+                'sub_type' => $a->sub_type,
+                'is_system' => $a->is_system,
+                'is_active' => $a->is_active,
                 'description' => $a->description,
             ])->values());
 
@@ -48,20 +52,20 @@ class AccountsController extends Controller
 
         $entryData = $entries->items();
         $mappedEntries = collect($entryData)->map(fn ($e) => [
-            'id'             => $e->id,
-            'entry_number'   => $e->entry_number,
-            'entry_date'     => $e->entry_date?->format('Y-m-d'),
-            'description'    => $e->description,
+            'id' => $e->id,
+            'entry_number' => $e->entry_number,
+            'entry_date' => $e->entry_date?->format('Y-m-d'),
+            'description' => $e->description,
             'reference_type' => $e->reference_type,
-            'status'         => $e->status,
-            'created_by'     => $e->creator?->name,
-            'total_debit'    => (float) $e->lines->sum('debit'),
-            'lines'          => $e->lines->map(fn ($l) => [
+            'status' => $e->status,
+            'created_by' => $e->creator?->name,
+            'total_debit' => (float) $e->lines->sum('debit'),
+            'lines' => $e->lines->map(fn ($l) => [
                 'account_code' => $l->account?->code,
                 'account_name' => $l->account?->name,
-                'debit'        => (float) $l->debit,
-                'credit'       => (float) $l->credit,
-                'description'  => $l->description,
+                'debit' => (float) $l->debit,
+                'credit' => (float) $l->credit,
+                'description' => $l->description,
             ]),
         ]);
 
@@ -71,15 +75,15 @@ class AccountsController extends Controller
             ->get(['id', 'code', 'name', 'type']);
 
         return Inertia::render('Accounts/Index', [
-            'accounts'     => $accounts,
-            'entries'      => [
-                'data'         => $mappedEntries,
+            'accounts' => $accounts,
+            'entries' => [
+                'data' => $mappedEntries,
                 'current_page' => $entries->currentPage(),
-                'last_page'    => $entries->lastPage(),
-                'total'        => $entries->total(),
+                'last_page' => $entries->lastPage(),
+                'total' => $entries->total(),
             ],
             'account_list' => $accountList->map(fn ($a) => [
-                'id'   => $a->id,
+                'id' => $a->id,
                 'code' => $a->code,
                 'name' => $a->name,
                 'type' => $a->type,
@@ -91,10 +95,10 @@ class AccountsController extends Controller
     public function storeAccount(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'code'        => 'required|string|max:20',
-            'name'        => 'required|string|max:100',
-            'type'        => 'required|in:asset,liability,equity,income,expense',
-            'sub_type'    => 'nullable|string|max:40',
+            'code' => 'required|string|max:20',
+            'name' => 'required|string|max:100',
+            'type' => 'required|in:asset,liability,equity,income,expense',
+            'sub_type' => 'nullable|string|max:40',
             'description' => 'nullable|string|max:300',
         ]);
 
@@ -112,10 +116,10 @@ class AccountsController extends Controller
     public function updateAccount(Request $request, Account $account): RedirectResponse
     {
         $validated = $request->validate([
-            'name'        => 'required|string|max:100',
-            'sub_type'    => 'nullable|string|max:40',
+            'name' => 'required|string|max:100',
+            'sub_type' => 'nullable|string|max:40',
             'description' => 'nullable|string|max:300',
-            'is_active'   => 'boolean',
+            'is_active' => 'boolean',
         ]);
 
         // System accounts: only allow toggling active status
@@ -133,16 +137,16 @@ class AccountsController extends Controller
     public function storeEntry(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'entry_date'  => 'required|date',
+            'entry_date' => 'required|date',
             'description' => 'required|string|max:300',
-            'lines'       => 'required|array|min:2',
+            'lines' => 'required|array|min:2',
             'lines.*.account_id' => 'required|exists:accounts,id',
-            'lines.*.debit'      => 'required|numeric|min:0',
-            'lines.*.credit'     => 'required|numeric|min:0',
-            'lines.*.description'=> 'nullable|string|max:200',
+            'lines.*.debit' => 'required|numeric|min:0',
+            'lines.*.credit' => 'required|numeric|min:0',
+            'lines.*.description' => 'nullable|string|max:200',
         ]);
 
-        $totalDebit  = collect($validated['lines'])->sum('debit');
+        $totalDebit = collect($validated['lines'])->sum('debit');
         $totalCredit = collect($validated['lines'])->sum('credit');
 
         if (abs($totalDebit - $totalCredit) > 0.01) {
@@ -153,23 +157,23 @@ class AccountsController extends Controller
 
         DB::transaction(function () use ($validated, $tenant) {
             $entry = JournalEntry::create([
-                'tenant_id'    => $tenant->id,
+                'tenant_id' => $tenant->id,
                 'entry_number' => JournalEntry::nextNumber($tenant->id),
-                'entry_date'   => $validated['entry_date'],
-                'description'  => $validated['description'],
+                'entry_date' => $validated['entry_date'],
+                'description' => $validated['description'],
                 'reference_type' => 'manual',
-                'status'       => 'posted',
-                'created_by'   => auth()->id(),
+                'status' => 'posted',
+                'created_by' => auth()->id(),
             ]);
 
             foreach ($validated['lines'] as $line) {
                 if ($line['debit'] > 0 || $line['credit'] > 0) {
                     JournalLine::create([
                         'journal_entry_id' => $entry->id,
-                        'account_id'       => $line['account_id'],
-                        'debit'            => $line['debit'],
-                        'credit'           => $line['credit'],
-                        'description'      => $line['description'] ?? null,
+                        'account_id' => $line['account_id'],
+                        'debit' => $line['debit'],
+                        'credit' => $line['credit'],
+                        'description' => $line['description'] ?? null,
                     ]);
                 }
             }
@@ -185,6 +189,7 @@ class AccountsController extends Controller
         }
 
         $entry->delete();
+
         return back()->with('success', 'Journal entry deleted.');
     }
 
@@ -196,7 +201,7 @@ class AccountsController extends Controller
         DefaultChartOfAccounts::seedForTenant($tenant->id);
 
         $from = $request->get('from', now()->startOfMonth()->format('Y-m-d'));
-        $to   = $request->get('to',   now()->format('Y-m-d'));
+        $to = $request->get('to', now()->format('Y-m-d'));
 
         $accounts = Account::where('tenant_id', $tenant->id)
             ->where('is_active', true)
@@ -211,76 +216,83 @@ class AccountsController extends Controller
                 ->where('journal_entries.entry_date', '>=', $from)
                 ->where('journal_entries.entry_date', '<=', $to);
 
-            $debit  = (float) (clone $q)->sum('journal_lines.debit');
+            $debit = (float) (clone $q)->sum('journal_lines.debit');
             $credit = (float) (clone $q)->sum('journal_lines.credit');
 
-            if ($debit == 0 && $credit == 0) return null;
+            if ($debit == 0 && $credit == 0) {
+                return null;
+            }
 
             return [
-                'code'    => $a->code,
-                'name'    => $a->name,
-                'type'    => $a->type,
-                'debit'   => $debit,
-                'credit'  => $credit,
+                'code' => $a->code,
+                'name' => $a->name,
+                'type' => $a->type,
+                'debit' => $debit,
+                'credit' => $credit,
                 'balance' => $a->normalBalance() === 'debit' ? $debit - $credit : $credit - $debit,
             ];
         })->filter()->values();
 
         // ── Profit & Loss ─────────────────────────────────────────────
-        $incomeAccounts  = $accounts->where('type', 'income');
+        $incomeAccounts = $accounts->where('type', 'income');
         $expenseAccounts = $accounts->where('type', 'expense');
 
         $pnlIncome = $incomeAccounts->map(function (Account $a) use ($from, $to) {
             $balance = $this->accountBalance($a->id, $from, $to);
+
             return $balance != 0 ? ['code' => $a->code, 'name' => $a->name, 'sub_type' => $a->sub_type, 'amount' => $balance] : null;
         })->filter()->values();
 
         $pnlExpenses = $expenseAccounts->map(function (Account $a) use ($from, $to) {
             $balance = $this->accountBalance($a->id, $from, $to);
+
             return $balance != 0 ? ['code' => $a->code, 'name' => $a->name, 'sub_type' => $a->sub_type, 'amount' => $balance] : null;
         })->filter()->values();
 
-        $totalIncome   = $pnlIncome->sum('amount');
+        $totalIncome = $pnlIncome->sum('amount');
         $totalExpenses = $pnlExpenses->sum('amount');
-        $netProfit     = $totalIncome - $totalExpenses;
+        $netProfit = $totalIncome - $totalExpenses;
 
         // ── Balance Sheet ─────────────────────────────────────────────
         // For balance sheet we use all-time balances (no date range)
-        $assetAccounts     = $accounts->where('type', 'asset');
+        $assetAccounts = $accounts->where('type', 'asset');
         $liabilityAccounts = $accounts->where('type', 'liability');
-        $equityAccounts    = $accounts->where('type', 'equity');
+        $equityAccounts = $accounts->where('type', 'equity');
 
         $bsAssets = $assetAccounts->map(function (Account $a) {
             $b = $this->accountBalance($a->id);
+
             return $b != 0 ? ['code' => $a->code, 'name' => $a->name, 'sub_type' => $a->sub_type, 'amount' => $b] : null;
         })->filter()->values();
 
         $bsLiabilities = $liabilityAccounts->map(function (Account $a) {
             $b = $this->accountBalance($a->id);
+
             return $b != 0 ? ['code' => $a->code, 'name' => $a->name, 'sub_type' => $a->sub_type, 'amount' => $b] : null;
         })->filter()->values();
 
         $bsEquity = $equityAccounts->map(function (Account $a) {
             $b = $this->accountBalance($a->id);
+
             return $b != 0 ? ['code' => $a->code, 'name' => $a->name, 'sub_type' => $a->sub_type, 'amount' => $b] : null;
         })->filter()->values();
 
         return Inertia::render('Accounts/Reports', [
-            'trial_balance'   => $trialBalance,
+            'trial_balance' => $trialBalance,
             'pnl' => [
-                'income'        => $pnlIncome,
-                'expenses'      => $pnlExpenses,
-                'total_income'  => $totalIncome,
-                'total_expenses'=> $totalExpenses,
-                'net_profit'    => $netProfit,
+                'income' => $pnlIncome,
+                'expenses' => $pnlExpenses,
+                'total_income' => $totalIncome,
+                'total_expenses' => $totalExpenses,
+                'net_profit' => $netProfit,
             ],
             'balance_sheet' => [
-                'assets'           => $bsAssets,
-                'liabilities'      => $bsLiabilities,
-                'equity'           => $bsEquity,
-                'total_assets'     => $bsAssets->sum('amount'),
-                'total_liabilities'=> $bsLiabilities->sum('amount'),
-                'total_equity'     => $bsEquity->sum('amount') + $netProfit,
+                'assets' => $bsAssets,
+                'liabilities' => $bsLiabilities,
+                'equity' => $bsEquity,
+                'total_assets' => $bsAssets->sum('amount'),
+                'total_liabilities' => $bsLiabilities->sum('amount'),
+                'total_equity' => $bsEquity->sum('amount') + $netProfit,
             ],
             'filters' => ['from' => $from, 'to' => $to],
         ]);
@@ -293,13 +305,13 @@ class AccountsController extends Controller
         $tenant = auth()->user()->tenant;
 
         // ── Accounts Receivable: customers with outstanding udhaar ────
-        $receivables = \App\Models\Customer::where('tenant_id', $tenant->id)
+        $receivables = Customer::where('tenant_id', $tenant->id)
             ->where('current_balance', '>', 0)
             ->orderByDesc('current_balance')
             ->get()
             ->map(function ($c) {
                 // Oldest unpaid sale date (first sale that contributed to udhaar)
-                $oldestSale = \App\Models\Sale::where('customer_id', $c->id)
+                $oldestSale = Sale::where('customer_id', $c->id)
                     ->where('udhaar_amount', '>', 0)
                     ->whereIn('status', ['completed', 'partially_returned'])
                     ->orderBy('created_at')
@@ -310,31 +322,30 @@ class AccountsController extends Controller
                     : null;
 
                 return [
-                    'id'              => $c->id,
-                    'name'            => $c->name,
-                    'phone'           => $c->phone,
-                    'balance'         => (float) $c->current_balance,
-                    'credit_limit'    => (float) $c->credit_limit,
-                    'oldest_sale_date'=> $oldestSale?->format('Y-m-d'),
-                    'age_days'        => $ageDays,
+                    'id' => $c->id,
+                    'name' => $c->name,
+                    'phone' => $c->phone,
+                    'balance' => (float) $c->current_balance,
+                    'credit_limit' => (float) $c->credit_limit,
+                    'oldest_sale_date' => $oldestSale?->format('Y-m-d'),
+                    'age_days' => $ageDays,
                 ];
             });
 
         $totalReceivable = $receivables->sum('balance');
 
         // ── Accounts Payable: suppliers with outstanding balance ──────────
-        $payables = \App\Models\Supplier::where('tenant_id', $tenant->id)
+        $payableSupplierRows = Supplier::where('tenant_id', $tenant->id)
             ->where('current_balance', '>', 0)
             ->with('party.customer')
             ->orderByDesc('current_balance')
-            ->get()
-            ->map(function ($s) {
-                // Oldest unpaid PO date
-                $oldestPo = \App\Models\PurchaseOrder::where('supplier_id', $s->id)
-                    ->whereIn('status', ['ordered', 'received', 'partial'])
-                    ->where('paid_amount', '<', \DB::raw('total'))
-                    ->orderBy('order_date')
-                    ->value('order_date');
+            ->get();
+
+        $oldestDueBySupplier = PurchaseOrder::oldestDueOrderDatesBySupplierIds($payableSupplierRows->pluck('id'));
+
+        $payables = $payableSupplierRows
+            ->map(function ($s) use ($oldestDueBySupplier) {
+                $oldestPo = $oldestDueBySupplier[(string) $s->id] ?? null;
 
                 $ageDays = $oldestPo
                     ? (int) max(0, now()->startOfDay()->diffInDays(Carbon::parse($oldestPo)->startOfDay()))
@@ -344,15 +355,15 @@ class AccountsController extends Controller
                 $ar = (float) ($s->party?->customer?->current_balance ?? 0);
 
                 return [
-                    'id'             => $s->id,
-                    'name'           => $s->name,
-                    'company'        => $s->company,
-                    'phone'          => $s->phone,
-                    'balance'        => $ap,
-                    'ar_balance'     => $ar,
-                    'net_payable'    => max(0, $ap - $ar),
+                    'id' => $s->id,
+                    'name' => $s->name,
+                    'company' => $s->company,
+                    'phone' => $s->phone,
+                    'balance' => $ap,
+                    'ar_balance' => $ar,
+                    'net_payable' => max(0, $ap - $ar),
                     'oldest_po_date' => $oldestPo ? Carbon::parse($oldestPo)->format('Y-m-d') : null,
-                    'age_days'       => $ageDays,
+                    'age_days' => $ageDays,
                 ];
             });
 
@@ -361,12 +372,12 @@ class AccountsController extends Controller
         $payableAccount = Account::where('tenant_id', $tenant->id)->where('code', '2010')->first();
 
         return Inertia::render('Accounts/Receivables', [
-            'receivables'      => $receivables->values(),
-            'payables'         => $payables->values(),
+            'receivables' => $receivables->values(),
+            'payables' => $payables->values(),
             'total_receivable' => $totalReceivable,
-            'total_payable'    => $totalPayable,
-            'ar_account_id'    => Account::where('tenant_id', $tenant->id)->where('code', '1030')->value('id'),
-            'ap_account_id'    => $payableAccount?->id,
+            'total_payable' => $totalPayable,
+            'ar_account_id' => Account::where('tenant_id', $tenant->id)->where('code', '1030')->value('id'),
+            'ap_account_id' => $payableAccount?->id,
         ]);
     }
 
@@ -377,8 +388,8 @@ class AccountsController extends Controller
         $tenant = auth()->user()->tenant;
         DefaultChartOfAccounts::seedForTenant($tenant->id);
 
-        $from      = $request->get('from', now()->startOfMonth()->format('Y-m-d'));
-        $to        = $request->get('to',   now()->format('Y-m-d'));
+        $from = $request->get('from', now()->startOfMonth()->format('Y-m-d'));
+        $to = $request->get('to', now()->format('Y-m-d'));
         $accountId = $request->get('account');
 
         // All active accounts for the picker
@@ -389,7 +400,7 @@ class AccountsController extends Controller
             ->map(fn ($a) => ['id' => $a->id, 'code' => $a->code, 'name' => $a->name, 'type' => $a->type]);
 
         $account = null;
-        $lines   = collect();
+        $lines = collect();
         $openingBalance = 0.0;
 
         if ($accountId) {
@@ -397,7 +408,7 @@ class AccountsController extends Controller
         }
 
         // Default to Accounts Receivable (1030) when no account selected
-        if (!$account) {
+        if (! $account) {
             $account = Account::where('tenant_id', $tenant->id)->where('code', '1030')->first();
             $accountId = $account?->id;
         }
@@ -409,7 +420,7 @@ class AccountsController extends Controller
                 ->where('journal_entries.status', 'posted')
                 ->where('journal_entries.entry_date', '<', $from);
 
-            $obDebit  = (float) (clone $obQ)->sum('journal_lines.debit');
+            $obDebit = (float) (clone $obQ)->sum('journal_lines.debit');
             $obCredit = (float) (clone $obQ)->sum('journal_lines.credit');
             $openingBalance = $account->normalBalance() === 'debit'
                 ? $obDebit - $obCredit
@@ -438,51 +449,57 @@ class AccountsController extends Controller
             // Build running balance
             $running = $openingBalance;
             $lines = $rawLines->map(function ($l) use ($account, &$running) {
-                $debit  = (float) $l->debit;
+                $debit = (float) $l->debit;
                 $credit = (float) $l->credit;
                 $running += $account->normalBalance() === 'debit'
                     ? ($debit - $credit)
                     : ($credit - $debit);
 
                 return [
-                    'entry_number'   => $l->entry_number,
-                    'entry_date'     => $l->entry_date,
-                    'description'    => $l->line_description ?: $l->entry_description,
+                    'entry_number' => $l->entry_number,
+                    'entry_date' => $l->entry_date,
+                    'description' => $l->line_description ?: $l->entry_description,
                     'reference_type' => $l->reference_type,
-                    'debit'          => $debit,
-                    'credit'         => $credit,
-                    'balance'        => $running,
+                    'debit' => $debit,
+                    'credit' => $credit,
+                    'balance' => $running,
                 ];
             });
         }
 
         return Inertia::render('Accounts/Ledger', [
-            'account_list'    => $accountList,
-            'selected_account'=> $account ? [
-                'id'   => $account->id,
+            'account_list' => $accountList,
+            'selected_account' => $account ? [
+                'id' => $account->id,
                 'code' => $account->code,
                 'name' => $account->name,
                 'type' => $account->type,
             ] : null,
             'opening_balance' => $openingBalance,
-            'lines'           => $lines->values(),
-            'filters'         => ['account' => $accountId, 'from' => $from, 'to' => $to],
+            'lines' => $lines->values(),
+            'filters' => ['account' => $accountId, 'from' => $from, 'to' => $to],
         ]);
     }
 
-    private function accountBalance(string $accountId, string $from = null, string $to = null): float
+    private function accountBalance(string $accountId, ?string $from = null, ?string $to = null): float
     {
         $account = Account::find($accountId);
-        if (!$account) return 0;
+        if (! $account) {
+            return 0;
+        }
 
         $q = JournalLine::where('account_id', $accountId)
             ->join('journal_entries', 'journal_entries.id', '=', 'journal_lines.journal_entry_id')
             ->where('journal_entries.status', 'posted');
 
-        if ($from) $q->where('journal_entries.entry_date', '>=', $from);
-        if ($to)   $q->where('journal_entries.entry_date', '<=', $to);
+        if ($from) {
+            $q->where('journal_entries.entry_date', '>=', $from);
+        }
+        if ($to) {
+            $q->where('journal_entries.entry_date', '<=', $to);
+        }
 
-        $debit  = (float) (clone $q)->sum('journal_lines.debit');
+        $debit = (float) (clone $q)->sum('journal_lines.debit');
         $credit = (float) (clone $q)->sum('journal_lines.credit');
 
         return $account->normalBalance() === 'debit'

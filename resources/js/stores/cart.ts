@@ -23,7 +23,8 @@ export interface CartItem {
     unit_price: number;
     cost_price: number;
     quantity: number;
-    discount: number; // item-level discount in PKR
+    /** PKR discounted off each unit; line discount = this × quantity */
+    discount_per_unit: number;
     stock: number;
 }
 
@@ -62,8 +63,12 @@ export const useCartStore = defineStore('cart', () => {
     // ── Computed ───────────────────────────────────────────
     const itemCount = computed(() => items.value.reduce((s, i) => s + i.quantity, 0));
 
+    function lineDiscountTotal(item: CartItem): number {
+        return Math.round(item.discount_per_unit * item.quantity * 100) / 100;
+    }
+
     const subtotal = computed(() =>
-        items.value.reduce((s, i) => s + (i.unit_price * i.quantity) - i.discount, 0),
+        items.value.reduce((s, i) => s + (i.unit_price * i.quantity) - lineDiscountTotal(i), 0),
     );
 
     const total = computed(() => Math.max(0, subtotal.value - cartDiscount.value));
@@ -122,6 +127,9 @@ export const useCartStore = defineStore('cart', () => {
             const ratePrice = getRatePrice(item.product_id, item.variant_id);
             if (ratePrice !== null) {
                 item.unit_price = ratePrice;
+                if (item.discount_per_unit > item.unit_price) {
+                    item.discount_per_unit = item.unit_price;
+                }
             }
         });
     }
@@ -146,7 +154,7 @@ export const useCartStore = defineStore('cart', () => {
                 unit_price: unitPrice,
                 cost_price: product.cost_price,
                 quantity: 1,
-                discount: 0,
+                discount_per_unit: 0,
                 stock: product.stock,
             });
         }
@@ -164,8 +172,14 @@ export const useCartStore = defineStore('cart', () => {
         items.value.splice(index, 1);
     }
 
-    function setItemDiscount(index: number, discount: number) {
-        items.value[index].discount = discount;
+    /** PKR off each unit (capped at unit price so line total never goes negative). */
+    function setItemDiscount(index: number, discountPerUnit: number) {
+        const item = items.value[index];
+        if (!item) {
+            return;
+        }
+        const cap = Math.max(0, item.unit_price);
+        item.discount_per_unit = Math.min(Math.max(0, discountPerUnit), cap);
     }
 
     function clearCart() {
@@ -193,7 +207,7 @@ export const useCartStore = defineStore('cart', () => {
                 quantity: i.quantity,
                 unit_price: i.unit_price,
                 cost_price: i.cost_price,
-                discount: i.discount,
+                discount: lineDiscountTotal(i),
             })),
             payment: {
                 method: paymentMethod.value,
@@ -242,6 +256,7 @@ export const useCartStore = defineStore('cart', () => {
         updateQuantity,
         removeItem,
         setItemDiscount,
+        lineDiscountTotal,
         clearCart,
         buildSalePayload,
         setRateList,

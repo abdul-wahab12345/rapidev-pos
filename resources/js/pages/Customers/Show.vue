@@ -149,7 +149,7 @@ const typeLabel = ledgerTypeBadge;
     <Head :title="customer.name" />
 
     <AppLayout :breadcrumbs="breadcrumbs">
-        <div class="flex flex-col gap-6 p-6 max-w-5xl">
+        <div class="flex flex-col gap-6 p-6 max-w-[90rem] w-full mx-auto">
 
             <!-- Header -->
             <div class="flex flex-wrap items-start gap-3">
@@ -232,10 +232,10 @@ const typeLabel = ledgerTypeBadge;
                 </div>
             </div>
 
-            <div class="grid gap-6 lg:grid-cols-3">
+            <div class="grid gap-6 lg:grid-cols-12">
 
-                <!-- Ledger (2/3) -->
-                <div class="lg:col-span-2">
+                <!-- Ledger — wider column on large screens -->
+                <div class="min-w-0 lg:col-span-9">
                     <div class="mb-3 flex items-center gap-2">
                         <BookOpen class="h-4 w-4 text-muted-foreground" />
                         <h2 class="font-semibold text-foreground">{{ t('customers.ledgerHistory') }}</h2>
@@ -243,12 +243,12 @@ const typeLabel = ledgerTypeBadge;
                     </div>
 
                     <div class="rounded-xl border border-border overflow-x-auto">
-                        <table class="w-full min-w-[840px] border-collapse text-sm">
+                        <table class="w-full min-w-[980px] border-collapse text-sm">
                             <thead class="bg-muted/50">
                                 <tr class="text-start text-xs font-semibold uppercase tracking-wide text-muted-foreground [&>th]:align-middle">
                                     <th class="whitespace-nowrap px-4 py-2.5">{{ t('customers.ledgerColDate') }}</th>
                                     <th class="whitespace-nowrap px-4 py-2.5">{{ t('customers.ledgerColType') }}</th>
-                                    <th class="min-w-[7rem] px-4 py-2.5">{{ t('customers.ledgerColDescription') }}</th>
+                                    <th class="min-w-[14rem] px-4 py-2.5">{{ t('customers.ledgerColDescription') }}</th>
                                     <th class="min-w-[9.5rem] whitespace-nowrap px-4 py-2.5 text-end">{{ t('customers.ledgerColAmount') }}</th>
                                     <th class="min-w-[11rem] whitespace-nowrap px-4 py-2.5 text-end">{{ t('customers.ledgerColBalance') }}</th>
                                     <th class="min-w-[10rem] whitespace-nowrap px-4 py-2.5 text-end"></th>
@@ -265,7 +265,7 @@ const typeLabel = ledgerTypeBadge;
                                             {{ typeLabel[entry.type] ? t(typeLabel[entry.type].labelKey) : entry.type }}
                                         </span>
                                     </td>
-                                    <td class="px-4 py-2.5 text-xs text-muted-foreground">
+                                    <td class="min-w-[14rem] px-4 py-2.5 text-xs text-muted-foreground break-words">
                                         {{ entry.description || '—' }}
                                         <span v-if="entry.payment_method" class="ms-1 capitalize">({{ entry.payment_method }})</span>
                                     </td>
@@ -305,7 +305,7 @@ const typeLabel = ledgerTypeBadge;
                 </div>
 
                 <!-- Right: recent sales + notes -->
-                <div class="space-y-4">
+                <div class="min-w-0 space-y-4 lg:col-span-3">
 
                     <!-- Recent sales -->
                     <div>

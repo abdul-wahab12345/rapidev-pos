@@ -26,6 +26,33 @@ export const saleStatusVariant: Record<string, 'success' | 'destructive' | 'warn
     returned:           'info',
 };
 
+/** Badge variant union for journals — matches `Badge.vue` */
+export type JournalRefBadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline' | 'success' | 'warning' | 'info' | 'purple';
+
+/** Journal entry reference_type → i18n label + Badge variant (General Ledger) */
+export const journalReferenceBadge: Record<string, { labelKey: string; variant: JournalRefBadgeVariant }> = {
+    manual: { labelKey: 'accounts.refManual', variant: 'secondary' },
+    sale: { labelKey: 'badges.sale', variant: 'info' },
+    payment: { labelKey: 'badges.payment', variant: 'success' },
+    void: { labelKey: 'badges.void', variant: 'destructive' },
+    expense: { labelKey: 'accounts.refExpense', variant: 'warning' },
+    return: { labelKey: 'badges.glReturn', variant: 'purple' },
+    expense_void: { labelKey: 'badges.glExpenseVoid', variant: 'destructive' },
+    po_payment: { labelKey: 'badges.glPoPayment', variant: 'success' },
+    po_payment_void: { labelKey: 'badges.glPoPaymentVoid', variant: 'destructive' },
+    customer_payment_void: { labelKey: 'badges.glCustomerPaymentVoid', variant: 'destructive' },
+    purchase: { labelKey: 'badges.glPurchase', variant: 'info' },
+    supplier_return: { labelKey: 'badges.glSupplierReturn', variant: 'purple' },
+};
+
+export function formatJournalReferenceFallback(raw: string): string {
+    return raw
+        .split('_')
+        .filter(Boolean)
+        .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1).toLowerCase())
+        .join(' ');
+}
+
 export const ledgerTypeBadge: Record<string, { labelKey: string; class: string }> = {
     sale:           { labelKey: 'badges.sale',         class: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
     payment:        { labelKey: 'badges.payment',      class: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },

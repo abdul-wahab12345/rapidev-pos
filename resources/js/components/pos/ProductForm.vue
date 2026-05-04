@@ -3,7 +3,7 @@ import CategoryBadge from '@/components/pos/CategoryBadge.vue';
 import { Button } from '@/components/ui/button';
 import { router, useForm } from '@inertiajs/vue3';
 import { Plus, X } from 'lucide-vue-next';
-import { ref, watch } from 'vue';
+import { computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 
 interface Category {
@@ -67,12 +67,11 @@ const form = useForm({
     variants: (props.product?.variants ?? []) as VariantRow[],
 });
 
-// Auto-compute margin
-const margin = ref(0);
-watch([() => form.cost_price, () => form.selling_price], ([cost, sell]) => {
-    const c = Number(cost);
-    const s = Number(sell);
-    margin.value = c > 0 ? Math.round(((s - c) / c) * 100 * 10) / 10 : 0;
+// Auto-compute margin from cost vs selling price (computed so edit form shows correct initial value).
+const margin = computed(() => {
+    const c = Number(form.cost_price);
+    const s = Number(form.selling_price);
+    return c > 0 ? Math.round(((s - c) / c) * 100 * 10) / 10 : 0;
 });
 
 // Variant management
