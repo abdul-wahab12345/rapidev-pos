@@ -29,8 +29,8 @@ class SalesController extends Controller
         if ($request->filled('search')) {
             $s = $request->search;
             $query->where(function ($q) use ($s) {
-                $q->where('invoice_number', 'ilike', "%{$s}%")
-                  ->orWhereHas('customer', fn ($q2) => $q2->where('name', 'ilike', "%{$s}%"));
+                $q->where('invoice_number', 'like', "%{$s}%")
+                  ->orWhereHas('customer', fn ($q2) => $q2->where('name', 'like', "%{$s}%"));
             });
         }
 

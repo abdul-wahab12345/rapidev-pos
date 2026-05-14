@@ -59,10 +59,10 @@ class Product extends TenantAware
     public function scopeSearch(Builder $query, string $term): Builder
     {
         return $query->where(function ($q) use ($term) {
-            $q->where('name',    'ilike', "%{$term}%")
-              ->orWhere('name_ur', 'ilike', "%{$term}%")
-              ->orWhere('sku',     'ilike', "%{$term}%")
-              ->orWhere('barcode', 'ilike', "%{$term}%");
+            $q->where('name',    'like', "%{$term}%")
+              ->orWhere('name_ur', 'like', "%{$term}%")
+              ->orWhere('sku',     'like', "%{$term}%")
+              ->orWhere('barcode', 'like', "%{$term}%");
         });
     }
 

@@ -54,7 +54,7 @@ class Customer extends TenantAware
     public function scopeSearch(Builder $query, string $term): Builder
     {
         return $query->where(function ($q) use ($term) {
-            $q->where('name', 'ilike', "%{$term}%")
+            $q->where('name', 'like', "%{$term}%")
               ->orWhere('phone', 'like', "%{$term}%");
         });
     }

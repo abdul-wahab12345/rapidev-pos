@@ -36,8 +36,8 @@ class ReturnController extends Controller
         if ($request->filled('search')) {
             $s = $request->search;
             $query->where(function ($q) use ($s) {
-                $q->where('return_number', 'ilike', "%{$s}%")
-                  ->orWhereHas('sale', fn ($q2) => $q2->where('invoice_number', 'ilike', "%{$s}%"));
+                $q->where('return_number', 'like', "%{$s}%")
+                  ->orWhereHas('sale', fn ($q2) => $q2->where('invoice_number', 'like', "%{$s}%"));
             });
         }
 

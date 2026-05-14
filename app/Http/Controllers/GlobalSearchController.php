@@ -23,7 +23,7 @@ class GlobalSearchController extends Controller
 
         // Customers
         Customer::where(function ($query) use ($q) {
-            $query->where('name', 'ilike', "%{$q}%")
+            $query->where('name', 'like', "%{$q}%")
                   ->orWhere('phone', 'like', "%{$q}%");
         })->limit(5)->get(['id', 'name', 'phone'])
           ->each(function ($c) use (&$results) {
@@ -38,7 +38,7 @@ class GlobalSearchController extends Controller
 
         // Suppliers
         Supplier::where(function ($query) use ($q) {
-            $query->where('name', 'ilike', "%{$q}%")
+            $query->where('name', 'like', "%{$q}%")
                   ->orWhere('phone', 'like', "%{$q}%");
         })->limit(5)->get(['id', 'name', 'phone'])
           ->each(function ($s) use (&$results) {
@@ -52,7 +52,7 @@ class GlobalSearchController extends Controller
           });
 
         // Sales / invoices
-        Sale::where('invoice_number', 'ilike', "%{$q}%")
+        Sale::where('invoice_number', 'like', "%{$q}%")
             ->limit(5)
             ->get(['id', 'invoice_number', 'total', 'status', 'created_at'])
             ->each(function ($s) use (&$results) {
@@ -66,7 +66,7 @@ class GlobalSearchController extends Controller
             });
 
         // Purchase orders
-        PurchaseOrder::where('po_number', 'ilike', "%{$q}%")
+        PurchaseOrder::where('po_number', 'like', "%{$q}%")
             ->limit(5)
             ->get(['id', 'po_number', 'total', 'status'])
             ->each(function ($o) use (&$results) {
