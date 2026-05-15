@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Models\Category;
 use App\Models\Customer;
+use App\Models\DiningTable;
 use App\Models\CustomerLedgerEntry;
 use App\Models\Product;
 use App\Models\RateList;
@@ -94,6 +95,10 @@ class PosController extends Controller
             ]),
             'activeRateListId'     => $activeRateList?->id,
             'activeRateListPrices' => $rateListPrices,
+            'diningTables' => DiningTable::where('tenant_id', auth()->user()->tenant_id)
+                ->where('is_active', true)
+                ->orderBy('section')->orderBy('name')
+                ->get(['id', 'name', 'capacity', 'section']),
         ]);
     }
 
@@ -174,6 +179,9 @@ class PosController extends Controller
             'discount' => 'nullable|numeric|min:0',
             'notes' => 'nullable|string',
             'rate_list_id' => 'nullable|exists:rate_lists,id',
+            'dining_table_id' => 'nullable|exists:dining_tables,id',
+            'order_type'      => 'nullable|in:dine_in,takeaway,delivery',
+            'delivery_fee'    => 'nullable|numeric|min:0',
         ]);
 
         $user = auth()->user();
@@ -189,6 +197,7 @@ class PosController extends Controller
                 // Calculate totals — values come in as decimal PKR, stored as decimal PKR
                 $subtotal     = 0.0;
                 $cartDiscount = round((float) ($validated['discount'] ?? 0), 2);
+                $deliveryFee  = round((float) ($validated['delivery_fee'] ?? 0), 2);
 
                 foreach ($validated['items'] as $item) {
                     $itemDiscount = round((float) ($item['discount'] ?? 0), 2);
@@ -197,7 +206,7 @@ class PosController extends Controller
                     $subtotal    += $lineTotal;
                 }
 
-                $total = round($subtotal - $cartDiscount, 2);
+                $total = round($subtotal - $cartDiscount + $deliveryFee, 2);
 
                 // Payment breakdown
                 $cash      = round((float) ($validated['payment']['cash'] ?? 0), 2);
@@ -228,6 +237,9 @@ class PosController extends Controller
                     'payment_method'  => $validated['payment']['method'],
                     'notes'           => $validated['notes'] ?? null,
                     'rate_list_id'    => $validated['rate_list_id'] ?? null,
+                    'dining_table_id' => $validated['dining_table_id'] ?? null,
+                    'order_type'      => $validated['order_type'] ?? 'takeaway',
+                    'delivery_fee'    => $deliveryFee,
                 ]);
 
                 // Create sale items + decrement stock

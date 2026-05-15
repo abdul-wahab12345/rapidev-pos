@@ -157,6 +157,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::delete('areas/{area}', [LocationsController::class, 'destroyArea'])->name('areas.destroy');
     });
 
+    // ── Dining Tables ──────────────────────────────────────
+    Route::prefix('tables')->name('tables.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Tables\DiningTableController::class, 'index'])->name('index');
+        Route::post('/', [\App\Http\Controllers\Tables\DiningTableController::class, 'store'])->name('store');
+        Route::patch('/{diningTable}', [\App\Http\Controllers\Tables\DiningTableController::class, 'update'])->name('update');
+        Route::delete('/{diningTable}', [\App\Http\Controllers\Tables\DiningTableController::class, 'destroy'])->name('destroy');
+    });
+
     // ── Business Settings ──────────────────────────────────
     Route::prefix('business-settings')->name('business-settings.')->group(function () {
         Route::get('/', [BusinessSettingsController::class, 'index'])->name('index');

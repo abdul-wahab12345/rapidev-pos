@@ -22,7 +22,7 @@ class SalesController extends Controller
 {
     public function index(Request $request): Response
     {
-        $query = Sale::with(['customer:id,name,phone', 'cashier:id,name', 'branch:id,name'])
+        $query = Sale::with(['customer:id,name,phone', 'cashier:id,name', 'branch:id,name', 'diningTable:id,name'])
             ->orderByDesc('created_at');
 
         // Filters
@@ -98,6 +98,9 @@ class SalesController extends Controller
                     'discount'       => (float) $s->discount,
                     'udhaar_amount'  => (float) $s->udhaar_amount,
                     'payment_method' => $s->payment_method,
+                    'order_type'     => $s->order_type,
+                    'delivery_fee'   => (float) $s->delivery_fee,
+                    'dining_table'   => $s->diningTable ? ['id' => $s->diningTable->id, 'name' => $s->diningTable->name] : null,
                     'customer'       => $s->customer ? ['id' => $s->customer->id, 'name' => $s->customer->name, 'phone' => $s->customer->phone] : null,
                     'cashier'        => $s->cashier ? ['id' => $s->cashier->id, 'name' => $s->cashier->name] : null,
                     'branch'         => $s->branch ? ['id' => $s->branch->id, 'name' => $s->branch->name] : null,
@@ -119,6 +122,7 @@ class SalesController extends Controller
             'customer:id,name,phone,address',
             'cashier:id,name',
             'branch:id,name',
+            'diningTable:id,name',
         ]);
 
         // Returns for this sale
@@ -147,6 +151,12 @@ class SalesController extends Controller
                 'udhaar_amount'   => (float) $sale->udhaar_amount,
                 'payment_method' => $sale->payment_method,
                 'notes'          => $sale->notes,
+                'order_type'     => $sale->order_type,
+                'delivery_fee'   => (float) $sale->delivery_fee,
+                'dining_table'   => $sale->diningTable ? [
+                    'id'   => $sale->diningTable->id,
+                    'name' => $sale->diningTable->name,
+                ] : null,
                 'customer'       => $sale->customer ? [
                     'id'    => $sale->customer->id,
                     'name'  => $sale->customer->name,
@@ -181,7 +191,7 @@ class SalesController extends Controller
     // AJAX: return full receipt data for inline printing from the list page
     public function receiptData(Sale $sale): JsonResponse
     {
-        $sale->load(['items.product:id,name_ur', 'customer:id,name,phone', 'cashier:id,name', 'branch:id,name']);
+        $sale->load(['items.product:id,name_ur', 'customer:id,name,phone', 'cashier:id,name', 'branch:id,name', 'diningTable:id,name']);
 
         $tenant   = auth()->user()->tenant;
         $settings = $tenant?->settings ?? [];
@@ -200,6 +210,7 @@ class SalesController extends Controller
             'jazzcash_amount'  => (float) $sale->jazzcash_amount,
             'easypaisa_amount' => (float) $sale->easypaisa_amount,
             'udhaar_amount'    => (float) $sale->udhaar_amount,
+            'delivery_fee'     => (float) $sale->delivery_fee,
             'payment_method'   => $sale->payment_method,
             'customer'         => $sale->customer ? ['name' => $sale->customer->name, 'phone' => $sale->customer->phone] : null,
             'cashier'          => ['name' => $sale->cashier?->name],
@@ -223,7 +234,9 @@ class SalesController extends Controller
             'receipt_footer'    => data_get($settings, 'receipt_footer', 'Thank you for your business!'),
             'currency_symbol'   => data_get($settings, 'currency_symbol', 'Rs'),
             'language'          => data_get($settings, 'language', 'en'),
-            'invoice_template'  => data_get($settings, 'invoice_template', 'thermal'),
+            'invoice_template'   => data_get($settings, 'invoice_template', 'thermal'),
+            'dining_table_name'  => $sale->diningTable?->name,
+            'order_type'         => $sale->order_type,
         ]);
     }
 

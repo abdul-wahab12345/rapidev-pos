@@ -36,7 +36,12 @@ const props = defineProps<{
     rateLists: RateListOption[];
     activeRateListId: string | null;
     activeRateListPrices: Record<string, number>;
+    diningTables: Array<{ id: string; name: string; capacity: number; section: string | null }>;
 }>();
+
+// ── Table / order type state ────────────────────────────────────
+const selectedTableId  = ref<string | null>(null);
+const orderType        = ref<'dine_in' | 'takeaway'>('takeaway');
 
 // live stats — updated after each completed sale
 const liveStats = ref({ ...props.stats });
@@ -273,13 +278,34 @@ async function submitSale() {
             return;
         }
 
-        const result = await posService.storeSale(cart.buildSalePayload());
+        const payload = {
+            ...cart.buildSalePayload(),
+            dining_table_id: orderType.value === 'dine_in' ? selectedTableId.value : null,
+            order_type: orderType.value,
+        };
+        const result = await posService.storeSale(payload);
         if (result.success) {
-            cart.lastSale = { invoice_number: result.sale.invoice_number, total: result.sale.total, change: result.sale.change };
+            // Snapshot table/order info BEFORE resetting (needed for print)
+            const tableName = orderType.value === 'dine_in' && selectedTableId.value
+                ? props.diningTables.find(t => t.id === selectedTableId.value)?.name ?? null
+                : null;
+
+            cart.lastSale = {
+                invoice_number:    result.sale.invoice_number,
+                total:             result.sale.total,
+                change:            result.sale.change,
+                dining_table_name: tableName,
+                order_type:        orderType.value,
+                delivery_fee:      cart.deliveryFee,
+            };
             cart.showPaymentModal = false;
             cart.saleComplete = true;
             playSaleComplete();
             discountInput.value = 0;
+            // Reset order type / table / delivery for next order
+            selectedTableId.value = null;
+            orderType.value = 'takeaway';
+            cart.deliveryFee = 0;
             fetchProducts();
             refreshStats();
         }
@@ -332,13 +358,16 @@ function printReceipt() {
         })),
         subtotal:         cart.subtotal,
         discount:         cart.cartDiscount,
+        delivery_fee:     sale.delivery_fee,
         total:            sale.total,
         payment_method:   cart.paymentMethod,
         cash_amount:      cart.paymentMethod === 'cash' ? cart.cashReceived : (cart.paymentMethod === 'mixed' ? cart.cashReceived : 0),
         jazzcash_amount:  cart.paymentMethod === 'jazzcash' ? sale.total : cart.jazzcashAmount,
         easypaisa_amount: cart.paymentMethod === 'easypaisa' ? sale.total : cart.easypaisaAmount,
-        udhaar_amount:    cart.udhaarAmount,
-        change_amount:    sale.change,
+        udhaar_amount:     cart.udhaarAmount,
+        change_amount:     sale.change,
+        dining_table_name: sale.dining_table_name,
+        order_type:        sale.order_type,
     });
 }
 
@@ -484,7 +513,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKey));
         <!-- ════════════════════════════════════════
              RIGHT — Cart
         ════════════════════════════════════════ -->
-        <div class="flex w-[340px] shrink-0 flex-col bg-card xl:w-[380px]">
+        <div class="flex w-[420px] shrink-0 flex-col bg-card xl:w-[460px]">
 
             <!-- Rate list selector (only shown when rate lists exist) -->
             <div v-if="rateLists.length > 0" class="shrink-0 border-b border-border bg-muted/30 px-4 py-2">
@@ -505,6 +534,54 @@ onUnmounted(() => window.removeEventListener('keydown', handleKey));
                             </option>
                         </select>
                     </div>
+                </div>
+            </div>
+
+            <!-- Order type + table selector -->
+            <div class="shrink-0 border-b border-border bg-muted/20 px-4 py-2 space-y-2">
+                <div class="flex items-center gap-2">
+                    <!-- Takeaway / Dine-in / Delivery toggle -->
+                    <div class="flex rounded-lg border border-border overflow-hidden text-xs">
+                        <button
+                            @click="orderType = 'takeaway'; selectedTableId = null; cart.deliveryFee = 0"
+                            :class="['px-2.5 py-1 font-medium transition-colors', orderType === 'takeaway' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground']"
+                        >{{ t('pos.takeaway') }}</button>
+                        <button
+                            @click="orderType = 'dine_in'; cart.deliveryFee = 0"
+                            :class="['px-2.5 py-1 font-medium transition-colors', orderType === 'dine_in' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground']"
+                        >{{ t('pos.dineIn') }}</button>
+                        <button
+                            @click="orderType = 'delivery'; selectedTableId = null"
+                            :class="['px-2.5 py-1 font-medium transition-colors', orderType === 'delivery' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground']"
+                        >{{ t('pos.delivery') }}</button>
+                    </div>
+                    <!-- Table selector (only for dine-in) -->
+                    <select
+                        v-if="orderType === 'dine_in' && diningTables.length > 0"
+                        v-model="selectedTableId"
+                        class="flex-1 rounded-md border border-input bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                    >
+                        <option :value="null">{{ t('pos.selectTable') }}</option>
+                        <option v-for="tbl in diningTables" :key="tbl.id" :value="tbl.id">
+                            {{ tbl.name }} ({{ tbl.capacity }})
+                        </option>
+                    </select>
+                    <span v-if="orderType === 'dine_in' && diningTables.length === 0" class="text-xs text-muted-foreground italic">
+                        {{ t('pos.noTable') }}
+                    </span>
+                </div>
+                <!-- Delivery fee input (only for delivery) -->
+                <div v-if="orderType === 'delivery'" class="flex items-center gap-2">
+                    <label class="text-xs font-medium text-muted-foreground whitespace-nowrap">{{ t('pos.deliveryFee') }}</label>
+                    <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        :value="cart.deliveryFee"
+                        @input="cart.deliveryFee = Math.max(0, Number(($event.target as HTMLInputElement).value))"
+                        class="w-28 rounded-md border border-input bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                        :placeholder="t('pos.deliveryFeePh')"
+                    />
                 </div>
             </div>
 
@@ -824,6 +901,64 @@ onUnmounted(() => window.removeEventListener('keydown', handleKey));
                         <span v-if="cart.cashReceived >= cart.total" class="text-xs font-bold text-green-600 dark:text-green-400">
                             ← {{ fmt(cart.changeAmount) }}
                         </span>
+                    </div>
+
+                    <!-- Split / Mixed payment fields -->
+                    <div v-if="cart.paymentMethod === 'mixed' && cart.items.length > 0" class="mt-2 space-y-2">
+                        <div class="rounded-lg border border-border bg-muted/30 p-2.5 space-y-2">
+                            <!-- Cash part -->
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="text-xs text-muted-foreground w-20">{{ t('common.cash') }}</span>
+                                <input
+                                    v-model.number="cart.cashReceived"
+                                    type="number" min="0"
+                                    :placeholder="'0'"
+                                    class="flex-1 rounded-md border border-input bg-background px-2 py-1 text-right text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                                />
+                            </div>
+                            <!-- JazzCash part -->
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="text-xs text-muted-foreground w-20">{{ t('common.jazzcash') }}</span>
+                                <input
+                                    v-model.number="cart.jazzcashAmount"
+                                    type="number" min="0"
+                                    :placeholder="'0'"
+                                    class="flex-1 rounded-md border border-input bg-background px-2 py-1 text-right text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                                />
+                            </div>
+                            <!-- Easypaisa part -->
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="text-xs text-muted-foreground w-20">{{ t('common.easypaisa') }}</span>
+                                <input
+                                    v-model.number="cart.easypaisaAmount"
+                                    type="number" min="0"
+                                    :placeholder="'0'"
+                                    class="flex-1 rounded-md border border-input bg-background px-2 py-1 text-right text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                                />
+                            </div>
+                            <!-- Remaining = Udhaar -->
+                            <div v-if="cart.udhaarAmount > 0" class="flex items-center justify-between gap-2 border-t border-border pt-2">
+                                <span class="text-xs font-medium text-amber-600 dark:text-amber-400 w-20">{{ t('common.udhaar') }}</span>
+                                <span class="text-sm font-semibold text-amber-600 dark:text-amber-400">{{ fmt(cart.udhaarAmount) }}</span>
+                            </div>
+                            <!-- Running total vs order total -->
+                            <div class="flex items-center justify-between gap-2 border-t border-border pt-2">
+                                <span class="text-xs text-muted-foreground">{{ t('pos.covered') }}</span>
+                                <span :class="[
+                                    'text-sm font-bold',
+                                    Math.abs((cart.cashReceived + cart.jazzcashAmount + cart.easypaisaAmount + cart.udhaarAmount) - cart.total) <= 1
+                                        ? 'text-green-600 dark:text-green-400'
+                                        : 'text-destructive'
+                                ]">
+                                    {{ fmt(cart.cashReceived + cart.jazzcashAmount + cart.easypaisaAmount + cart.udhaarAmount) }}
+                                    / {{ fmt(cart.total) }}
+                                </span>
+                            </div>
+                        </div>
+                        <p v-if="cart.udhaarAmount > 0 && !cart.selectedCustomer" class="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                            <AlertTriangle class="h-3.5 w-3.5" />
+                            {{ t('pos.udhaarWarning') }}
+                        </p>
                     </div>
 
                     <p v-if="cart.paymentMethod === 'udhaar' && !cart.selectedCustomer" class="mt-2 flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">

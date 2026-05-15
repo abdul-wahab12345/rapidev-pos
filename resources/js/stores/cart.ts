@@ -38,12 +38,14 @@ export interface Customer {
 }
 
 export type PaymentMethod = 'cash' | 'jazzcash' | 'easypaisa' | 'udhaar' | 'mixed';
+export type OrderType = 'takeaway' | 'dine_in' | 'delivery';
 
 export const useCartStore = defineStore('cart', () => {
     // ── State ──────────────────────────────────────────────
     const items = ref<CartItem[]>([]);
     const selectedCustomer = ref<Customer | null>(null);
     const cartDiscount = ref(0); // PKR cart-level discount
+    const deliveryFee  = ref(0); // PKR delivery fee (only for delivery order type)
     const paymentMethod = ref<PaymentMethod>('cash');
     const cashReceived = ref(0);
     const jazzcashAmount = ref(0);
@@ -57,7 +59,14 @@ export const useCartStore = defineStore('cart', () => {
     const showPaymentModal = ref(false);
     const showCustomerPanel = ref(false);
     const saleComplete = ref(false);
-    const lastSale = ref<{ invoice_number: string; total: number; change: number } | null>(null);
+    const lastSale = ref<{
+        invoice_number: string;
+        total: number;
+        change: number;
+        dining_table_name: string | null;
+        order_type: OrderType;
+        delivery_fee: number;
+    } | null>(null);
     const isProcessing = ref(false);
 
     // ── Computed ───────────────────────────────────────────
@@ -71,7 +80,7 @@ export const useCartStore = defineStore('cart', () => {
         items.value.reduce((s, i) => s + (i.unit_price * i.quantity) - lineDiscountTotal(i), 0),
     );
 
-    const total = computed(() => Math.max(0, subtotal.value - cartDiscount.value));
+    const total = computed(() => Math.max(0, subtotal.value - cartDiscount.value + deliveryFee.value));
 
     const changeAmount = computed(() => {
         if (paymentMethod.value === 'cash') {
@@ -186,6 +195,7 @@ export const useCartStore = defineStore('cart', () => {
         items.value = [];
         selectedCustomer.value = null;
         cartDiscount.value = 0;
+        deliveryFee.value = 0;
         paymentMethod.value = 'cash';
         cashReceived.value = 0;
         jazzcashAmount.value = 0;
@@ -196,7 +206,7 @@ export const useCartStore = defineStore('cart', () => {
         // Keep rate list selection across sales
     }
 
-    function buildSalePayload(notes?: string) {
+    function buildSalePayload(notes?: string, orderType?: string, diningTableId?: string | null) {
         return {
             customer_id: selectedCustomer.value?.id ?? null,
             items: items.value.map((i) => ({
@@ -225,6 +235,7 @@ export const useCartStore = defineStore('cart', () => {
                 udhaar: udhaarAmount.value,
             },
             discount: cartDiscount.value,
+            delivery_fee: deliveryFee.value,
             notes: notes,
             rate_list_id: selectedRateListId.value ?? null,
         };
@@ -234,6 +245,7 @@ export const useCartStore = defineStore('cart', () => {
         items,
         selectedCustomer,
         cartDiscount,
+        deliveryFee,
         paymentMethod,
         cashReceived,
         jazzcashAmount,

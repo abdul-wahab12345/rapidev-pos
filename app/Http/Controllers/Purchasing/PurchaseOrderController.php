@@ -329,9 +329,10 @@ class PurchaseOrderController extends Controller
         }
 
         $validated = $request->validate([
-            'items' => 'required|array',
-            'items.*.id' => 'required|exists:purchase_order_items,id',
+            'items'          => 'required|array',
+            'items.*.id'     => 'required|exists:purchase_order_items,id',
             'items.*.quantity_received' => 'required|integer|min:0',
+            'payment_method' => 'nullable|in:cash,bank,credit',
         ]);
 
         $tenant = auth()->user()->tenant;
@@ -386,27 +387,28 @@ class PurchaseOrderController extends Controller
                 }
             }
 
+            // If a payment method was submitted, update the PO's payment_method
+            $receivePayMethod = $validated['payment_method'] ?? $order->payment_method;
             $order->update([
-                'status' => $allReceived ? 'received' : ($anyReceived ? 'partial' : $order->status),
-                'received_date' => $anyReceived ? now()->toDateString() : null,
+                'status'         => $allReceived ? 'received' : ($anyReceived ? 'partial' : $order->status),
+                'received_date'  => $anyReceived ? now()->toDateString() : null,
+                'payment_method' => $receivePayMethod,
             ]);
 
-            if (
-                $allReceived
-                && in_array($order->payment_method, ['cash', 'bank'], true)
-            ) {
+            // Auto-record payment if cash or bank (not credit)
+            if ($allReceived && in_array($receivePayMethod, ['cash', 'bank'], true)) {
                 $paidTotal = (float) $order->total;
                 if ($paidTotal > 0 && (float) $order->paid_amount < $paidTotal) {
                     $order->paid_amount = $paidTotal;
                     $order->save();
                     PurchaseOrderPayment::create([
-                        'tenant_id' => $order->tenant_id,
+                        'tenant_id'         => $order->tenant_id,
                         'purchase_order_id' => $order->id,
-                        'amount' => $paidTotal,
-                        'payment_method' => $order->payment_method,
-                        'notes' => 'Paid with goods receipt (ledger: goods received entry only).',
-                        'is_voided' => false,
-                        'created_by' => auth()->id(),
+                        'amount'            => $paidTotal,
+                        'payment_method'    => $receivePayMethod,
+                        'notes'             => 'Paid on goods receipt.',
+                        'is_voided'         => false,
+                        'created_by'        => auth()->id(),
                     ]);
                 }
             }

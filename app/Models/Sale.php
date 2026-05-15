@@ -9,6 +9,7 @@ class Sale extends TenantAware
 {
     protected $fillable = [
         'tenant_id', 'branch_id', 'user_id', 'customer_id', 'rate_list_id', 'invoice_number',
+        'dining_table_id', 'order_type', 'delivery_fee',
         'status', 'subtotal', 'discount', 'tax', 'total', 'paid', 'change_amount',
         'cash_amount', 'jazzcash_amount', 'easypaisa_amount', 'udhaar_amount',
         'payment_method', 'notes',
@@ -25,6 +26,7 @@ class Sale extends TenantAware
         'jazzcash_amount'  => 'decimal:2',
         'easypaisa_amount' => 'decimal:2',
         'udhaar_amount'    => 'decimal:2',
+        'delivery_fee'     => 'decimal:2',
     ];
 
     public function items(): HasMany
@@ -45,6 +47,11 @@ class Sale extends TenantAware
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class);
+    }
+
+    public function diningTable(): BelongsTo
+    {
+        return $this->belongsTo(DiningTable::class, 'dining_table_id');
     }
 
     public static function generateInvoiceNumber(string $tenantId): string

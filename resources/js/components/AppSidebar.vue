@@ -33,6 +33,7 @@ import {
     Truck,
     Users,
     Users2,
+    UtensilsCrossed,
     Wallet,
 } from 'lucide-vue-next';
 import { useI18n } from 'vue-i18n';
@@ -57,6 +58,7 @@ const navGroups = [
         items: [
             { titleKey: 'nav.dashboard', href: '/dashboard', icon: Gauge },
             { titleKey: 'nav.posCashier', href: '/pos', icon: ShoppingCart, soon: false },
+            { titleKey: 'nav.tables', href: '/tables', icon: UtensilsCrossed },
         ],
     },
     {

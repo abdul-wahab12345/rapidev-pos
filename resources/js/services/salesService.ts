@@ -22,8 +22,11 @@ const salesService = {
             invoice_template:  data.invoice_template  ?? 'thermal',
             branch_name:      data.branch?.name     ?? null,
             cashier_name:     data.cashier?.name    ?? null,
-            customer_name:    data.customer?.name   ?? null,
-            customer_phone:   data.customer?.phone  ?? null,
+            customer_name:      data.customer?.name       ?? null,
+            customer_phone:     data.customer?.phone      ?? null,
+            dining_table_name:  data.dining_table_name    ?? null,
+            order_type:         data.order_type           ?? null,
+            delivery_fee:       data.delivery_fee         ?? null,
             items: (data.items ?? []).map((item: any) => ({
                 name:          item.name ?? item.product_name,
                 name_ur:       item.name_ur       ?? null,

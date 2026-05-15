@@ -28,6 +28,9 @@ export interface ReceiptData {
     cashier_name?: string | null;
     customer_name?: string | null;
     customer_phone?: string | null;
+    dining_table_name?: string | null;
+    order_type?: 'dine_in' | 'takeaway' | 'delivery' | null;
+    delivery_fee?: number | null;
     items: ReceiptItem[];
     subtotal: number;
     discount: number;
@@ -120,6 +123,7 @@ ${data.receipt_header?`<p class="sub" style="font-style:italic">${data.receipt_h
 <p class="sub">${t('receipt.invoice')} <strong>${data.invoice_number}</strong></p>
 <p class="sub">${[dt, data.cashier_name].filter(Boolean).join(' &nbsp;|&nbsp; ')}</p>
 ${data.customer_name?`<p class="sub">${t('receipt.customer')} ${data.customer_name}${data.customer_phone?' | '+data.customer_phone:''}</p>`:''}
+${data.order_type?`<p class="sub">${data.order_type==='dine_in'?t('receipt.dineIn'):data.order_type==='delivery'?t('receipt.delivery'):t('receipt.takeaway')}${data.dining_table_name?' &nbsp;|&nbsp; '+t('receipt.table')+' '+data.dining_table_name:''}</p>`:''}
 <hr/>
 <table><thead><tr>
   <th>${t('receipt.item')}</th><th class="c">${t('receipt.qty')}</th>
@@ -130,6 +134,7 @@ ${data.customer_name?`<p class="sub">${t('receipt.customer')} ${data.customer_na
   <tr><td>${t('receipt.subtotal')}</td><td class="r">${fm(data.subtotal)}</td></tr>
   ${data.discount>0?`<tr><td>${t('receipt.discount')}</td><td class="r">−${fm(data.discount)}</td></tr>`:''}
   ${(data.tax??0)>0?`<tr><td>${t('receipt.tax')}</td><td class="r">${fm(data.tax!)}</td></tr>`:''}
+  ${(data.delivery_fee??0)>0?`<tr><td>${t('receipt.deliveryFee')}</td><td class="r">+${fm(data.delivery_fee!)}</td></tr>`:''}
   <tr class="tot-r"><td>${t('receipt.grandTotal')}</td><td class="r">${fm(data.total)}</td></tr>
 </table>
 <div class="badge"><strong>${t('receipt.payment')}</strong> ${data.payment_method.toUpperCase()}
@@ -142,6 +147,7 @@ ${(data.change_amount??0)>0?`<div class="chg">${t('receipt.change')} ${fm(data.c
 <hr/>
 <p class="ft">${footer}</p>
 <p class="ft">— ${data.business_name} —</p>
+<p class="ft" style="margin-top:6px;border-top:1px dashed #ccc;padding-top:4px;">Developed by Rapidev Tech | +92 303 0246973</p>
 <script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};<\/script>
 </body></html>`;
 }
@@ -261,7 +267,7 @@ body::before{
 
 <hr class="divider"/>
 
-<!-- Bill to / Payment method summary -->
+<!-- Bill to / Order info / Payment method -->
 <div class="bill-section">
   <div>
     <div class="bill-label">${t('a4.billTo')}</div>
@@ -269,6 +275,13 @@ body::before{
       ? `<div class="bill-val">${data.customer_name}</div><div>${data.customer_phone ?? ''}</div>`
       : `<div class="bill-val">—</div>`}
   </div>
+  ${data.order_type ? `
+  <div>
+    <div class="bill-label">${t('receipt.orderType')}</div>
+    <div class="bill-val">${data.order_type === 'dine_in' ? t('receipt.dineIn') : data.order_type === 'delivery' ? t('receipt.delivery') : t('receipt.takeaway')}</div>
+    ${data.dining_table_name ? `<div style="font-size:12px;color:#555">${t('receipt.table')}: ${data.dining_table_name}</div>` : ''}
+    ${(data.delivery_fee??0)>0 ? `<div style="font-size:12px;color:#555">${t('receipt.deliveryFee')}: ${fm(data.delivery_fee!)}</div>` : ''}
+  </div>` : ''}
   <div style="text-align:${isUr?'left':'right'}">
     <div class="bill-label">${t('receipt.payment')}</div>
     <div class="bill-val">${data.payment_method.toUpperCase()}</div>
@@ -297,6 +310,7 @@ body::before{
     <tr><td>${t('receipt.subtotal')}</td><td>${fm(data.subtotal)}</td></tr>
     ${data.discount>0?`<tr><td>${t('receipt.discount')}</td><td>−${fm(data.discount)}</td></tr>`:''}
     ${(data.tax??0)>0?`<tr><td>${t('receipt.tax')}</td><td>${fm(data.tax!)}</td></tr>`:''}
+    ${(data.delivery_fee??0)>0?`<tr><td>${t('receipt.deliveryFee')}</td><td>+${fm(data.delivery_fee!)}</td></tr>`:''}
     ${(data.change_amount??0)>0?`<tr><td>${t('receipt.change')}</td><td>${fm(data.change_amount!)}</td></tr>`:''}
     <tr class="tot-grand"><td>${t('receipt.grandTotal')}</td><td>${fm(data.total)}</td></tr>
   </table>
@@ -306,6 +320,7 @@ body::before{
 <div class="footer">
   ${data.receipt_header ? `<p style="margin-bottom:3px;font-style:italic">${data.receipt_header}</p>` : ''}
   <p>${footer}</p>
+  <p style="margin-top:4px;font-size:10px;color:#aaa;border-top:1px solid #eee;padding-top:4px;">Developed by Rapidev Tech | +92 303 0246973</p>
 </div>
 
 <script>window.onload=function(){window.print();window.onafterprint=function(){window.close();};};<\/script>

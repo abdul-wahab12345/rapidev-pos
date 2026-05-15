@@ -26,6 +26,9 @@ interface SaleRow {
     discount: number;
     payment_method: string;
     udhaar_amount: number;
+    order_type: string | null;
+    delivery_fee: number;
+    dining_table: { id: string; name: string } | null;
     customer: { id: string; name: string; phone: string } | null;
     cashier: { id: number; name: string } | null;
     branch: { id: string; name: string } | null;
@@ -301,6 +304,21 @@ function saleStatusLabel(st: SaleRow['status']) {
                             <td class="px-4 py-3">
                                 <span v-if="sale.customer" class="text-sm font-medium text-foreground">{{ sale.customer.name }}</span>
                                 <span v-else class="text-xs text-muted-foreground">{{ t('sales.walkInLabel') }}</span>
+                                <div v-if="sale.order_type" class="mt-0.5 flex items-center gap-1">
+                                    <span :class="[
+                                        'inline-flex items-center rounded-full px-1.5 py-0 text-[10px] font-medium',
+                                        sale.order_type === 'dine_in'
+                                            ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+                                            : sale.order_type === 'delivery'
+                                                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                                : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                    ]">
+                                        {{ sale.order_type === 'dine_in' ? t('pos.dineIn') : sale.order_type === 'delivery' ? t('pos.delivery') : t('pos.takeaway') }}
+                                    </span>
+                                    <span v-if="sale.dining_table" class="text-[10px] text-muted-foreground">
+                                        · {{ sale.dining_table.name }}
+                                    </span>
+                                </div>
                             </td>
 
                             <td class="px-4 py-3 text-sm text-muted-foreground">

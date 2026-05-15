@@ -56,6 +56,9 @@ interface Sale {
     udhaar_amount: number;
     payment_method: string;
     notes: string | null;
+    order_type: string | null;
+    delivery_fee: number;
+    dining_table: { id: string; name: string } | null;
     customer: { id: string; name: string; phone: string } | null;
     cashier: { id: number; name: string } | null;
     branch: { id: string; name: string } | null;
@@ -328,6 +331,36 @@ async function printReceipt() {
                             <div v-if="sale.change_amount > 0" class="flex justify-between border-t border-border pt-1.5 text-green-600 dark:text-green-400">
                                 <dt>{{ t('sales.changeGiven') }}</dt>
                                 <dd class="font-semibold">{{ fmt(sale.change_amount) }}</dd>
+                            </div>
+                        </dl>
+                    </div>
+
+                    <!-- Order Type / Table / Delivery -->
+                    <div v-if="sale.order_type" class="rounded-xl border border-border bg-card p-4">
+                        <h3 class="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{{ t('pos.orderType') }}</h3>
+                        <dl class="space-y-1.5 text-sm">
+                            <div class="flex justify-between">
+                                <dt class="text-muted-foreground">{{ t('pos.orderType') }}</dt>
+                                <dd>
+                                    <span :class="[
+                                        'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold',
+                                        sale.order_type === 'dine_in'
+                                            ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
+                                            : sale.order_type === 'delivery'
+                                                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                                : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                    ]">
+                                        {{ sale.order_type === 'dine_in' ? t('pos.dineIn') : sale.order_type === 'delivery' ? t('pos.delivery') : t('pos.takeaway') }}
+                                    </span>
+                                </dd>
+                            </div>
+                            <div v-if="sale.dining_table" class="flex justify-between">
+                                <dt class="text-muted-foreground">{{ t('pos.tableLabel') }}</dt>
+                                <dd class="font-medium text-foreground">{{ sale.dining_table.name }}</dd>
+                            </div>
+                            <div v-if="sale.order_type === 'delivery' && sale.delivery_fee > 0" class="flex justify-between">
+                                <dt class="text-muted-foreground">{{ t('pos.deliveryFee') }}</dt>
+                                <dd class="font-semibold text-foreground">{{ fmt(sale.delivery_fee) }}</dd>
                             </div>
                         </dl>
                     </div>

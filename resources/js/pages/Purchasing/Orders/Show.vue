@@ -106,14 +106,20 @@ function paymentMethodPo(m: string) {
 
 // ── Receive ────────────────────────────────────────────────────
 const showReceive = ref(false);
-const receiveForm = useForm({ items: props.order.items.map(i => ({ id: i.id, quantity_received: i.quantity_ordered })) });
+const receiveForm = useForm({
+    items: props.order.items.map(i => ({ id: i.id, quantity_received: i.quantity_ordered })),
+    payment_method: props.order.payment_method ?? 'credit',
+});
 function submitReceive() {
     receiveForm.post(route('purchasing.orders.receive', props.order.id), {
         onSuccess: () => { showReceive.value = false; },
     });
 }
 
-const quickReceiveForm = useForm({ items: props.order.items.map(i => ({ id: i.id, quantity_received: i.quantity_ordered })) });
+const quickReceiveForm = useForm({
+    items: props.order.items.map(i => ({ id: i.id, quantity_received: i.quantity_ordered })),
+    payment_method: props.order.payment_method ?? 'credit',
+});
 async function quickReceiveAll() {
     const ok = await confirm({
         title: t('purchasing.markAllReceivedConfirmTitle'),
@@ -450,6 +456,17 @@ const subtitleLine = computed(() => {
                         <Input v-model.number="line.quantity_received" type="number"
                             :max="order.items[i]?.quantity_ordered" min="0" class="mt-0.5 text-center" />
                     </div>
+                </div>
+                <!-- Payment method on receive -->
+                <div class="border-t border-border pt-2">
+                    <Label class="text-xs mb-1 block">{{ t('common.paymentMethod') }}</Label>
+                    <select v-model="receiveForm.payment_method"
+                        class="border-input bg-background text-foreground w-full rounded-md border px-3 py-2 text-sm">
+                        <option value="credit">{{ t('purchasing.creditAp') }}</option>
+                        <option value="cash">{{ t('common.cash') }}</option>
+                        <option value="bank">{{ t('purchasing.bankTransfer') }}</option>
+                    </select>
+                    <p class="text-muted-foreground text-xs mt-1">{{ t('purchasing.receivePaymentHint') }}</p>
                 </div>
                 <DialogFooter class="pt-2">
                     <Button type="button" variant="outline" @click="showReceive = false">{{ t('common.cancel') }}</Button>
