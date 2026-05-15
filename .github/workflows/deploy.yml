@@ -21,7 +21,25 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # ── 2. Node + Vite build ─────────────────────────────────
+      # ── 2. PHP + Composer (needed by Vite to resolve Ziggy) ─────
+      - name: Set up PHP 8.2
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo, mbstring, openssl, tokenizer, xml, ctype, json, bcmath, zip
+          tools: composer:v2
+
+      - name: Cache Composer packages
+        uses: actions/cache@v4
+        with:
+          path: vendor
+          key: composer-${{ hashFiles('composer.lock') }}
+          restore-keys: composer-
+
+      - name: Install Composer dependencies
+        run: composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+
+      # ── 3. Node + Vite build ─────────────────────────────────
       - name: Set up Node.js 24
         uses: actions/setup-node@v4
         with:
