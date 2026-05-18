@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import PosLayout from '@/layouts/PosLayout.vue';
-import { useCartStore, type CartProduct, type Customer } from '@/stores/cart';
+import { useCartStore, type CartProduct, type CartProductVariant, type Customer } from '@/stores/cart';
 import { Head } from '@inertiajs/vue3';
 import { useConfirm } from '@/composables/useConfirm';
 import { useReceipt } from '@/composables/useReceipt';
@@ -41,7 +41,26 @@ const props = defineProps<{
 
 // ── Table / order type state ────────────────────────────────────
 const selectedTableId  = ref<string | null>(null);
-const orderType        = ref<'dine_in' | 'takeaway'>('takeaway');
+const orderType        = ref<'dine_in' | 'takeaway' | 'delivery'>('takeaway');
+
+// ── Variant picker ──────────────────────────────────────────────
+const variantPickerProduct = ref<CartProduct | null>(null);
+
+function handleProductClick(product: CartProduct) {
+    if (product.has_variants && product.variants.length > 0) {
+        variantPickerProduct.value = product;
+    } else {
+        cart.addItem(product);
+        playAddToCart();
+    }
+}
+
+function selectVariant(variant: CartProductVariant) {
+    if (!variantPickerProduct.value) return;
+    cart.addItem(variantPickerProduct.value, variant.id, variant.label);
+    playAddToCart();
+    variantPickerProduct.value = null;
+}
 
 // live stats — updated after each completed sale
 const liveStats = ref({ ...props.stats });
@@ -449,8 +468,8 @@ onUnmounted(() => window.removeEventListener('keydown', handleKey));
                     <button
                         v-for="product in products"
                         :key="product.id"
-                        @click="cart.addItem(product); playAddToCart()"
-                        :disabled="product.stock === 0"
+                        @click="handleProductClick(product)"
+                        :disabled="product.stock === 0 && !product.has_variants"
                         :class="[
                             'group relative flex min-h-[88px] cursor-pointer flex-col justify-between rounded-xl border p-3 text-left transition-all',
                             cart.items.find(i => i.product_id === product.id)
@@ -464,10 +483,16 @@ onUnmounted(() => window.removeEventListener('keydown', handleKey));
                         <span
                             v-if="cart.items.find(i => i.product_id === product.id)"
                             class="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground"
-                        >{{ cart.items.find(i => i.product_id === product.id)?.quantity }}</span>
+                        >{{ cart.items.filter(i => i.product_id === product.id).reduce((s,i) => s + i.quantity, 0) }}</span>
 
-                        <!-- Out of stock -->
-                        <span v-if="product.stock === 0" class="absolute inset-0 flex items-center justify-center rounded-xl text-xs font-semibold text-muted-foreground">
+                        <!-- Variants badge -->
+                        <span
+                            v-else-if="product.has_variants"
+                            class="absolute right-2 top-2 rounded-full bg-violet-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-violet-600 dark:text-violet-400"
+                        >{{ product.variants.length }}v</span>
+
+                        <!-- Out of stock (only for non-variant products) -->
+                        <span v-if="product.stock === 0 && !product.has_variants" class="absolute inset-0 flex items-center justify-center rounded-xl text-xs font-semibold text-muted-foreground">
                             {{ t('pos.outOfStock') }}
                         </span>
 
@@ -476,10 +501,12 @@ onUnmounted(() => window.removeEventListener('keydown', handleKey));
 
                         <div class="mt-1.5 flex items-end justify-between gap-1">
                             <div class="flex flex-col leading-none">
-                                <span class="text-sm font-bold text-primary">{{ fmt(displayPrice(product)) }}</span>
-                                <span v-if="cart.getRatePrice(product.id, null) !== null" class="text-[10px] text-muted-foreground line-through">{{ fmt(product.selling_price) }}</span>
+                                <span class="text-sm font-bold text-primary">
+                                    {{ product.has_variants ? t('pos.selectVariant') : fmt(displayPrice(product)) }}
+                                </span>
+                                <span v-if="!product.has_variants && cart.getRatePrice(product.id, null) !== null" class="text-[10px] text-muted-foreground line-through">{{ fmt(product.selling_price) }}</span>
                             </div>
-                            <span class="text-[11px] text-muted-foreground">{{ product.stock > 0 ? `×${product.stock}` : '' }}</span>
+                            <span v-if="!product.has_variants" class="text-[11px] text-muted-foreground">{{ product.stock > 0 ? `×${product.stock}` : '' }}</span>
                         </div>
                     </button>
                 </div>
@@ -1152,4 +1179,60 @@ onUnmounted(() => window.removeEventListener('keydown', handleKey));
         </Teleport>
 
     </PosLayout>
+
+    <!-- ── Variant Picker Modal ──────────────────────────────── -->
+    <Teleport to="body">
+        <div
+            v-if="variantPickerProduct"
+            class="fixed inset-0 z-50 flex items-center justify-center p-4"
+            @click.self="variantPickerProduct = null"
+        >
+            <!-- Backdrop -->
+            <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+
+            <!-- Modal -->
+            <div class="relative z-10 w-full max-w-sm rounded-2xl border border-border bg-card shadow-2xl">
+                <!-- Header -->
+                <div class="flex items-center justify-between border-b border-border px-5 py-4">
+                    <div>
+                        <h3 class="font-semibold text-foreground">{{ variantPickerProduct.name }}</h3>
+                        <p class="text-xs text-muted-foreground">{{ t('pos.selectVariantHint') }}</p>
+                    </div>
+                    <button
+                        @click="variantPickerProduct = null"
+                        class="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+                    >
+                        <X class="h-4 w-4" />
+                    </button>
+                </div>
+
+                <!-- Variant list -->
+                <div class="max-h-80 overflow-y-auto p-3 space-y-2">
+                    <button
+                        v-for="v in variantPickerProduct.variants"
+                        :key="v.id"
+                        @click="selectVariant(v)"
+                        :disabled="v.stock === 0"
+                        :class="[
+                            'w-full flex items-center justify-between rounded-xl border px-4 py-3 text-left transition-all',
+                            v.stock === 0
+                                ? 'cursor-not-allowed border-border bg-muted/30 opacity-50'
+                                : 'border-border bg-background hover:border-primary/60 hover:bg-primary/5 active:scale-[0.98]',
+                        ]"
+                    >
+                        <div class="flex items-center gap-3">
+                            <div class="flex flex-col">
+                                <span class="font-medium text-foreground">{{ v.label }}</span>
+                                <span v-if="v.stock === 0" class="text-xs text-muted-foreground">{{ t('pos.outOfStock') }}</span>
+                                <span v-else class="text-xs text-muted-foreground">{{ t('pos.inStock') }}: {{ v.stock }}</span>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <span class="text-base font-bold text-primary">{{ fmt(v.selling_price) }}</span>
+                        </div>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </Teleport>
 </template>

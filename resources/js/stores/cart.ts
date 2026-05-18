@@ -1,6 +1,16 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 
+export interface CartProductVariant {
+    id: string;
+    label: string;
+    size: string | null;
+    color: string | null;
+    selling_price: number;
+    cost_price: number;
+    stock: number;
+}
+
 export interface CartProduct {
     id: string;
     name: string;
@@ -12,6 +22,7 @@ export interface CartProduct {
     has_variants: boolean;
     stock: number;
     category: { id: string; name: string; color: string } | null;
+    variants: CartProductVariant[];
 }
 
 export interface CartItem {
