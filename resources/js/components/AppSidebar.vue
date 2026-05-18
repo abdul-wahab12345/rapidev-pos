@@ -65,7 +65,7 @@ const navGroups = [
         labelKey: 'nav.inventory',
         items: [
             { titleKey: 'nav.products', href: '/inventory/products', icon: Package },
-            { titleKey: 'nav.categories', href: '/inventory/categories', icon: Tag, soon: true },
+            { titleKey: 'nav.categories', href: '/inventory/categories', icon: Tag },
             { titleKey: 'nav.stockManagement', href: '/inventory/stock', icon: Store },
         ],
     },

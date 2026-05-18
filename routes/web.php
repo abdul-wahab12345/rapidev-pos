@@ -6,6 +6,7 @@ use App\Http\Controllers\Customers\CustomersController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Expenses\ExpenseController;
 use App\Http\Controllers\GlobalSearchController;
+use App\Http\Controllers\Inventory\CategoryController;
 use App\Http\Controllers\Inventory\ProductController;
 use App\Http\Controllers\Inventory\StockController;
 use App\Http\Controllers\Locations\LocationsController;
@@ -80,9 +81,18 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ── Inventory ────────────────────────────────────────────
     Route::prefix('inventory')->name('inventory.')->group(function () {
 
+        Route::get('categories', [CategoryController::class, 'index'])->name('categories.index');
+        Route::post('categories', [CategoryController::class, 'store'])->name('categories.store');
+        Route::patch('categories/{category}', [CategoryController::class, 'update'])->name('categories.update');
+        Route::delete('categories/{category}', [CategoryController::class, 'destroy'])->name('categories.destroy');
+
         Route::resource('products', ProductController::class);
         Route::patch('products/{product}/toggle-status', [ProductController::class, 'toggleStatus'])
             ->name('products.toggle-status');
+        Route::get('products/csv-template', [ProductController::class, 'csvTemplate'])
+            ->name('products.csv-template');
+        Route::post('products/import', [ProductController::class, 'importCsv'])
+            ->name('products.import');
 
         Route::get('stock', [StockController::class, 'index'])->name('stock.index');
         Route::post('stock/adjust', [StockController::class, 'adjust'])->name('stock.adjust');

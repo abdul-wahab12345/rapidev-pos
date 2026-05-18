@@ -3,13 +3,17 @@ import CategoryBadge from '@/components/pos/CategoryBadge.vue';
 import StatCard from '@/components/pos/StatCard.vue';
 import StockBadge from '@/components/pos/StockBadge.vue';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useConfirm } from '@/composables/useConfirm';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
-import { Head, Link, router } from '@inertiajs/vue3';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
 import {
     AlertTriangle,
     ArrowUpDown,
+    CheckCircle,
+    Download,
+    FileUp,
     Package,
     PackageCheck,
     PackageX,
@@ -18,6 +22,7 @@ import {
     Search,
     Shapes,
     Trash2,
+    Upload,
     X,
 } from 'lucide-vue-next';
 import { computed, ref, watch } from 'vue';
@@ -147,6 +152,48 @@ const paginationRange = computed(() => {
         total: props.products.total,
     });
 });
+
+// ── CSV Import ────────────────────────────────────────────────
+const showImportModal = ref(false);
+const importFile      = ref<File | null>(null);
+const fileInput       = ref<HTMLInputElement | null>(null);
+const dragOver        = ref(false);
+
+const page = usePage();
+const importWarnings = computed(() => (page.props.flash as any)?.import_warnings as string[] | undefined);
+
+const importForm = useForm({ csv_file: null as File | null });
+
+function onFileChange(e: Event) {
+    const input = e.target as HTMLInputElement;
+    importFile.value = input.files?.[0] ?? null;
+}
+
+function onDrop(e: DragEvent) {
+    dragOver.value = false;
+    const file = e.dataTransfer?.files?.[0];
+    if (file && (file.name.endsWith('.csv') || file.type === 'text/csv')) {
+        importFile.value = file;
+    }
+}
+
+function submitImport() {
+    if (!importFile.value) return;
+    importForm.csv_file = importFile.value;
+    importForm.post(route('inventory.products.import'), {
+        forceFormData: true,
+        preserveScroll: true,
+        onSuccess: () => {
+            showImportModal.value = false;
+            importFile.value = null;
+            importForm.reset();
+        },
+    });
+}
+
+function downloadTemplate() {
+    window.location.href = route('inventory.products.csv-template');
+}
 </script>
 
 <template>
@@ -163,12 +210,18 @@ const paginationRange = computed(() => {
                         {{ t('inventory.productsDescription') }}
                     </p>
                 </div>
-                <Button as-child>
-                    <Link :href="route('inventory.products.create')">
-                        <Plus class="me-2 h-4 w-4" />
-                        {{ t('inventory.addProduct') }}
-                    </Link>
-                </Button>
+                <div class="flex items-center gap-2">
+                    <Button variant="outline" @click="showImportModal = true" class="gap-2">
+                        <Upload class="h-4 w-4" />
+                        {{ t('inventory.importCsv') }}
+                    </Button>
+                    <Button as-child>
+                        <Link :href="route('inventory.products.create')">
+                            <Plus class="me-2 h-4 w-4" />
+                            {{ t('inventory.addProduct') }}
+                        </Link>
+                    </Button>
+                </div>
             </div>
 
             <!-- Stats Row -->
@@ -410,5 +463,109 @@ const paginationRange = computed(() => {
             </div>
 
         </div>
+
+        <!-- ── Import warnings flash ────────────────────────── -->
+        <div v-if="importWarnings && importWarnings.length" class="mx-6 mb-4 rounded-xl border border-yellow-300 bg-yellow-50 p-4 dark:border-yellow-700 dark:bg-yellow-900/20">
+            <div class="flex items-start gap-3">
+                <AlertTriangle class="mt-0.5 h-4 w-4 shrink-0 text-yellow-600 dark:text-yellow-400" />
+                <div>
+                    <p class="text-sm font-semibold text-yellow-800 dark:text-yellow-300">{{ t('inventory.importPartialWarning') }}</p>
+                    <ul class="mt-1 space-y-0.5">
+                        <li v-for="(w, i) in importWarnings" :key="i" class="text-xs text-yellow-700 dark:text-yellow-400">{{ w }}</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
     </AppLayout>
+
+    <!-- ── CSV Import Modal ──────────────────────────────────── -->
+    <Dialog :open="showImportModal" @update:open="(v) => { if (!v) { showImportModal = false; importFile = null; } }">
+        <DialogContent class="max-w-lg">
+            <DialogHeader>
+                <DialogTitle class="flex items-center gap-2">
+                    <FileUp class="h-5 w-5 text-primary" />
+                    {{ t('inventory.importCsvTitle') }}
+                </DialogTitle>
+            </DialogHeader>
+
+            <div class="space-y-4 py-2">
+                <!-- Template download hint -->
+                <div class="flex items-center justify-between rounded-lg border border-dashed border-border bg-muted/30 px-4 py-3">
+                    <div class="text-sm text-muted-foreground">{{ t('inventory.importTemplateHint') }}</div>
+                    <button
+                        type="button"
+                        @click="downloadTemplate"
+                        class="flex items-center gap-1.5 rounded-md bg-primary/10 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/20 transition-colors"
+                    >
+                        <Download class="h-3.5 w-3.5" />
+                        {{ t('inventory.downloadTemplate') }}
+                    </button>
+                </div>
+
+                <!-- Column reference -->
+                <div class="rounded-lg border border-border bg-muted/20 p-3">
+                    <p class="mb-2 text-xs font-semibold text-foreground">{{ t('inventory.importColumns') }}</p>
+                    <div class="flex flex-wrap gap-1">
+                        <span v-for="col in ['name *', 'name_ur', 'category', 'sku', 'barcode', 'unit', 'cost_price *', 'selling_price *', 'initial_stock', 'reorder_level', 'is_active']"
+                            :key="col"
+                            :class="[
+                                'rounded px-1.5 py-0.5 font-mono text-[11px]',
+                                col.includes('*') ? 'bg-primary/15 text-primary font-semibold' : 'bg-muted text-muted-foreground'
+                            ]"
+                        >{{ col }}</span>
+                    </div>
+                    <p class="mt-1.5 text-[11px] text-muted-foreground">{{ t('inventory.importColumnsHint') }}</p>
+                </div>
+
+                <!-- Drop zone -->
+                <div
+                    @dragover.prevent="dragOver = true"
+                    @dragleave="dragOver = false"
+                    @drop.prevent="onDrop"
+                    @click="fileInput?.click()"
+                    :class="[
+                        'flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed p-8 transition-colors',
+                        dragOver ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50 hover:bg-muted/30',
+                    ]"
+                >
+                    <input
+                        ref="fileInput"
+                        type="file"
+                        accept=".csv,text/csv"
+                        class="hidden"
+                        @change="onFileChange"
+                    />
+                    <div v-if="importFile" class="flex items-center gap-2 text-sm text-foreground">
+                        <CheckCircle class="h-5 w-5 text-green-500" />
+                        <span class="font-medium">{{ importFile.name }}</span>
+                        <button type="button" @click.stop="importFile = null" class="text-muted-foreground hover:text-destructive">
+                            <X class="h-4 w-4" />
+                        </button>
+                    </div>
+                    <template v-else>
+                        <Upload class="h-8 w-8 text-muted-foreground/50" />
+                        <p class="text-sm font-medium text-foreground">{{ t('inventory.importDropHint') }}</p>
+                        <p class="text-xs text-muted-foreground">{{ t('inventory.importDropSub') }}</p>
+                    </template>
+                </div>
+
+                <p v-if="importForm.errors.csv_file" class="text-xs text-destructive">{{ importForm.errors.csv_file }}</p>
+            </div>
+
+            <DialogFooter class="gap-2">
+                <Button variant="outline" @click="showImportModal = false; importFile = null">
+                    {{ t('common.cancel') }}
+                </Button>
+                <Button
+                    @click="submitImport"
+                    :disabled="!importFile || importForm.processing"
+                    class="gap-2"
+                >
+                    <Upload class="h-4 w-4" />
+                    {{ importForm.processing ? t('inventory.importing') : t('inventory.importNow') }}
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
 </template>

@@ -8,6 +8,8 @@ use App\Models\Product;
 use App\Models\StockLevel;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response as HttpResponse;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -241,6 +243,167 @@ class ProductController extends Controller
         $status = $product->is_active ? 'activated' : 'deactivated';
 
         return back()->with('success', "Product {$status}.");
+    }
+
+    // ── CSV template download ─────────────────────────────────────
+    public function csvTemplate(): HttpResponse
+    {
+        $headers = [
+            'name', 'name_ur', 'category', 'sku', 'barcode',
+            'unit', 'cost_price', 'selling_price', 'initial_stock',
+            'reorder_level', 'is_active',
+        ];
+
+        $example = [
+            'Chicken Burger', 'چکن برگر', 'Burgers', 'BRG-001', '',
+            'piece', '150', '250', '50', '10', '1',
+        ];
+
+        $csv  = implode(',', $headers) . "\n";
+        $csv .= implode(',', $example) . "\n";
+
+        return response($csv, 200, [
+            'Content-Type'        => 'text/csv',
+            'Content-Disposition' => 'attachment; filename="products_import_template.csv"',
+        ]);
+    }
+
+    // ── CSV import ────────────────────────────────────────────────
+    public function importCsv(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'csv_file' => 'required|file|mimes:csv,txt|max:2048',
+        ]);
+
+        $file   = $request->file('csv_file');
+        $handle = fopen($file->getRealPath(), 'r');
+
+        // Read and normalise header row
+        $rawHeaders = fgetcsv($handle);
+        if (!$rawHeaders) {
+            fclose($handle);
+            return back()->with('error', 'CSV file is empty or unreadable.');
+        }
+        $headers = array_map(fn ($h) => strtolower(trim($h)), $rawHeaders);
+
+        $required = ['name', 'cost_price', 'selling_price'];
+        foreach ($required as $col) {
+            if (!in_array($col, $headers)) {
+                fclose($handle);
+                return back()->with('error', "CSV is missing required column: \"{$col}\".");
+            }
+        }
+
+        $user   = auth()->user();
+        $tenant = $user->tenant;
+        $branch = $tenant?->defaultBranch();
+
+        // Build category name → id map (tenant-scoped)
+        $categoryMap = Category::pluck('id', 'name')->toArray();
+
+        $imported = 0;
+        $skipped  = 0;
+        $errors   = [];
+        $row      = 1;
+
+        DB::transaction(function () use (
+            $handle, $headers, $categoryMap, $user, $tenant, $branch,
+            &$imported, &$skipped, &$errors, &$row
+        ) {
+            while (($data = fgetcsv($handle)) !== false) {
+                $row++;
+                if (count(array_filter($data)) === 0) continue; // skip blank rows
+
+                $col = [];
+                foreach ($headers as $i => $key) {
+                    $col[$key] = isset($data[$i]) ? trim($data[$i]) : '';
+                }
+
+                $name = $col['name'] ?? '';
+                if (empty($name)) {
+                    $errors[] = "Row {$row}: name is empty — skipped.";
+                    $skipped++;
+                    continue;
+                }
+
+                $costPrice    = (float) ($col['cost_price']    ?? 0);
+                $sellingPrice = (float) ($col['selling_price'] ?? 0);
+
+                if ($sellingPrice <= 0) {
+                    $errors[] = "Row {$row}: \"{$name}\" has invalid selling_price — skipped.";
+                    $skipped++;
+                    continue;
+                }
+
+                // Resolve category by name
+                $categoryId = null;
+                if (!empty($col['category'])) {
+                    $catName = $col['category'];
+                    if (!isset($categoryMap[$catName])) {
+                        // Auto-create the category
+                        $newCat = Category::create([
+                            'name'  => $catName,
+                            'slug'  => Str::slug($catName),
+                            'color' => '#6366f1',
+                        ]);
+                        $categoryMap[$catName] = $newCat->id;
+                    }
+                    $categoryId = $categoryMap[$catName];
+                }
+
+                $sku = !empty($col['sku']) ? $col['sku'] : $this->generateSku($name);
+
+                // Skip duplicate SKU within this tenant
+                if (Product::where('sku', $sku)->exists()) {
+                    $errors[] = "Row {$row}: SKU \"{$sku}\" already exists — skipped.";
+                    $skipped++;
+                    continue;
+                }
+
+                $product = Product::create([
+                    'tenant_id'     => $tenant->id,
+                    'category_id'   => $categoryId,
+                    'name'          => $name,
+                    'name_ur'       => $col['name_ur'] ?? null ?: null,
+                    'sku'           => $sku,
+                    'barcode'       => $col['barcode'] ?? null ?: null,
+                    'unit'          => !empty($col['unit']) ? $col['unit'] : 'piece',
+                    'cost_price'    => $costPrice,
+                    'selling_price' => $sellingPrice,
+                    'reorder_level' => isset($col['reorder_level']) && $col['reorder_level'] !== ''
+                                        ? (int) $col['reorder_level'] : 5,
+                    'is_active'     => isset($col['is_active']) && $col['is_active'] !== ''
+                                        ? (bool)(int) $col['is_active'] : true,
+                    'has_variants'  => false,
+                ]);
+
+                if ($branch) {
+                    StockLevel::create([
+                        'tenant_id'  => $tenant->id,
+                        'branch_id'  => $branch->id,
+                        'product_id' => $product->id,
+                        'quantity'   => isset($col['initial_stock']) && $col['initial_stock'] !== ''
+                                         ? (int) $col['initial_stock'] : 0,
+                    ]);
+                }
+
+                $imported++;
+            }
+        });
+
+        fclose($handle);
+
+        $message = "Imported {$imported} product(s) successfully.";
+        if ($skipped > 0) {
+            $message .= " {$skipped} row(s) skipped.";
+        }
+
+        $sessionData = ['success' => $message];
+        if (!empty($errors)) {
+            $sessionData['import_warnings'] = array_slice($errors, 0, 10); // cap at 10 warnings
+        }
+
+        return back()->with($sessionData);
     }
 
     private function generateSku(string $name): string
