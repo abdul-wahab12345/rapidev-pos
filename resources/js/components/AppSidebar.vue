@@ -47,13 +47,18 @@ const mobileSidebarEdge = computed(() =>
     page.props?.tenant?.settings?.language === 'ur' ? 'right' : 'left',
 );
 
+const canAccessAccounts = computed(
+    () => (page.props.auth as any)?.permissions?.can_access_accounts !== false,
+);
+
 function isActive(href: string) {
     return page.url.startsWith(href);
 }
 
-const navGroups = [
+const allNavGroups = [
     {
         labelKey: 'nav.main',
+        requiresAccounts: false,
         items: [
             { titleKey: 'nav.dashboard', href: '/dashboard', icon: Gauge },
             { titleKey: 'nav.posCashier', href: '/pos', icon: ShoppingCart, soon: false },
@@ -61,6 +66,7 @@ const navGroups = [
     },
     {
         labelKey: 'nav.inventory',
+        requiresAccounts: false,
         items: [
             { titleKey: 'nav.products', href: '/inventory/products', icon: Package },
             { titleKey: 'nav.categories', href: '/inventory/categories', icon: Tag, soon: true },
@@ -69,6 +75,7 @@ const navGroups = [
     },
     {
         labelKey: 'nav.sales',
+        requiresAccounts: false,
         items: [
             { titleKey: 'nav.salesOrders', href: '/sales', icon: LayoutGrid, soon: false },
             { titleKey: 'nav.returnsRefunds', href: '/returns', icon: RotateCcw },
@@ -79,30 +86,34 @@ const navGroups = [
     },
     {
         labelKey: 'nav.purchasing',
+        requiresAccounts: false,
         items: [
             { titleKey: 'nav.suppliers', href: '/purchasing/suppliers', icon: Truck },
             { titleKey: 'nav.purchaseOrders', href: '/purchasing/orders', icon: CreditCard },
+            { titleKey: 'nav.expenses', href: '/expenses', icon: Wallet },
         ],
     },
     {
         labelKey: 'nav.finance',
+        requiresAccounts: true,   // ← hidden for salesman
         items: [
             { titleKey: 'nav.accounts', href: '/accounts', icon: DollarSign },
             { titleKey: 'nav.generalLedger', href: '/accounts/ledger', icon: ScrollText },
             { titleKey: 'nav.receivablesPayables', href: '/accounts/receivables', icon: CreditCard },
             { titleKey: 'nav.businessReports', href: '/reports', icon: ClipboardList },
             { titleKey: 'nav.reports', href: '/accounts/reports', icon: BarChart3 },
-            { titleKey: 'nav.expenses', href: '/expenses', icon: Wallet },
         ],
     },
     {
         labelKey: 'nav.hr',
+        requiresAccounts: false,
         items: [
             { titleKey: 'nav.employees', href: '/employees', icon: Users2, soon: true },
         ],
     },
     {
         labelKey: 'nav.system',
+        requiresAccounts: false,
         items: [
             { titleKey: 'nav.businessSettings', href: '/business-settings', icon: Settings },
             { titleKey: 'nav.locations', href: '/locations', icon: MapPin },
@@ -110,6 +121,10 @@ const navGroups = [
         ],
     },
 ];
+
+const navGroups = computed(() =>
+    allNavGroups.filter((g) => !g.requiresAccounts || canAccessAccounts.value),
+);
 </script>
 
 <template>
@@ -130,6 +145,7 @@ const navGroups = [
             <SidebarGroup
                 v-for="group in navGroups"
                 :key="group.labelKey"
+                v-show="!group.requiresAccounts || canAccessAccounts"
                 class="px-2 py-0"
             >
                 <SidebarGroupLabel>{{ t(group.labelKey) }}</SidebarGroupLabel>

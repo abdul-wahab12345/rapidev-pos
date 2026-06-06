@@ -88,8 +88,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('stock/adjust', [StockController::class, 'adjust'])->name('stock.adjust');
     });
 
-    // ── Accounts ─────────────────────────────────────────────
-    Route::prefix('accounts')->name('accounts.')->group(function () {
+    // ── Accounts (blocked for salesman role) ─────────────────
+    Route::prefix('accounts')->name('accounts.')->middleware('accounts.access')->group(function () {
         Route::get('/', [AccountsController::class, 'index'])->name('index');
         Route::post('/accounts', [AccountsController::class, 'storeAccount'])->name('store-account');
         Route::patch('/accounts/{account}', [AccountsController::class, 'updateAccount'])->name('update-account');
@@ -100,8 +100,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/receivables', [AccountsController::class, 'receivables'])->name('receivables');
     });
 
-    // ── Business / operational reports (lists & summaries, not statutory P&L) ──
-    Route::prefix('reports')->name('reports.')->group(function () {
+    // ── Business / operational reports (blocked for salesman role) ──
+    Route::prefix('reports')->name('reports.')->middleware('accounts.access')->group(function () {
         Route::get('/', [OperationalReportsController::class, 'index'])->name('index');
         Route::get('/udhaar-customers', [OperationalReportsController::class, 'udhaarCustomers'])->name('udhaar-customers');
         Route::get('/payable-vendors', [OperationalReportsController::class, 'payableVendors'])->name('payable-vendors');

@@ -51,6 +51,12 @@ class HandleInertiaRequests extends Middleware
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'auth' => [
                 'user' => $user,
+                'permissions' => $user ? [
+                    'can_access_accounts' => $user->canAccessAccounts(),
+                    'is_salesman'         => $user->isSalesman(),
+                    'is_manager'          => $user->isManager(),
+                    'is_owner'            => $user->isOwner(),
+                ] : null,
             ],
             'tenant' => $tenant ? [
                 'id' => $tenant->id,

@@ -51,9 +51,10 @@ class UserResource extends Resource
 
                 Forms\Components\Select::make('role')
                     ->options([
-                        'owner'   => 'Owner',
-                        'manager' => 'Manager',
-                        'cashier' => 'Cashier',
+                        'owner'    => 'Owner',
+                        'manager'  => 'Manager',
+                        'cashier'  => 'Cashier',
+                        'salesman' => 'Salesman',
                     ])
                     ->default('cashier')
                     ->required(),
@@ -91,9 +92,10 @@ class UserResource extends Resource
 
                 Tables\Columns\BadgeColumn::make('role')
                     ->colors([
-                        'warning' => 'cashier',
-                        'primary' => 'manager',
-                        'success' => 'owner',
+                        'warning'  => 'cashier',
+                        'primary'  => 'manager',
+                        'success'  => 'owner',
+                        'info'     => 'salesman',
                     ]),
 
                 Tables\Columns\IconColumn::make('is_active')
@@ -112,9 +114,10 @@ class UserResource extends Resource
             ->filters([
                 Tables\Filters\SelectFilter::make('role')
                     ->options([
-                        'owner'   => 'Owner',
-                        'manager' => 'Manager',
-                        'cashier' => 'Cashier',
+                        'owner'    => 'Owner',
+                        'manager'  => 'Manager',
+                        'cashier'  => 'Cashier',
+                        'salesman' => 'Salesman',
                     ]),
 
                 Tables\Filters\SelectFilter::make('tenant')

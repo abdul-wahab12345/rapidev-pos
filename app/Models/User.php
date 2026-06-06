@@ -49,6 +49,17 @@ class User extends Authenticatable implements FilamentUser
         return in_array($this->role, ['owner', 'manager']);
     }
 
+    public function isSalesman(): bool
+    {
+        return $this->role === 'salesman';
+    }
+
+    /** Returns true if the user can access financial/accounting modules. */
+    public function canAccessAccounts(): bool
+    {
+        return !$this->isSalesman();
+    }
+
     public function isSuperAdmin(): bool
     {
         return (bool) $this->is_super_admin;
