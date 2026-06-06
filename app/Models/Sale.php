@@ -10,7 +10,7 @@ class Sale extends TenantAware
     protected $fillable = [
         'tenant_id', 'branch_id', 'user_id', 'customer_id', 'rate_list_id', 'invoice_number',
         'status', 'subtotal', 'discount', 'tax', 'total', 'paid', 'change_amount',
-        'cash_amount', 'jazzcash_amount', 'easypaisa_amount', 'udhaar_amount',
+        'cash_amount', 'jazzcash_amount', 'easypaisa_amount', 'bank_amount', 'udhaar_amount',
         'payment_method', 'notes',
     ];
 
@@ -24,6 +24,7 @@ class Sale extends TenantAware
         'cash_amount'      => 'decimal:2',
         'jazzcash_amount'  => 'decimal:2',
         'easypaisa_amount' => 'decimal:2',
+        'bank_amount'      => 'decimal:2',
         'udhaar_amount'    => 'decimal:2',
     ];
 

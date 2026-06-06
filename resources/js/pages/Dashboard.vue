@@ -61,10 +61,11 @@ interface RecentSaleRow {
 }
 
 const props = defineProps<{
-    stats: Stats;
+    stats: Partial<Stats>;
     low_stock_peek: LowPeek[];
     recent_sales: RecentSaleRow[];
     business: { default_branch_name: string | null };
+    no_tenant?: boolean;
 }>();
 
 const { t } = useI18n();
@@ -76,10 +77,10 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 
 const userName = computed(() => page.props.auth?.user?.name ?? '');
 
-const revenueDelta = computed(() => props.stats.revenue_today - props.stats.revenue_yesterday);
+const revenueDelta = computed(() => (props.stats.revenue_today ?? 0) - (props.stats.revenue_yesterday ?? 0));
 
 const revenueDeltaPct = computed(() => {
-    const y = props.stats.revenue_yesterday;
+    const y = props.stats.revenue_yesterday ?? 0;
     const d = revenueDelta.value;
     if (!y || y === 0) return null;
     return ((d / y) * 100).toFixed(1);
@@ -127,6 +128,11 @@ function reorderLabel(level: number) {
             <!-- Header + POS CTA -->
             <div class="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
                 <div class="space-y-2 max-w-2xl">
+                    <!-- Super admin / no-tenant notice -->
+                    <div v-if="no_tenant" class="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
+                        This account is not linked to a business. Visit <strong>/admin</strong> to manage businesses and assign users.
+                    </div>
+
                     <p v-if="userName" class="text-sm font-medium text-muted-foreground truncate">
                         {{ userName }}
                     </p>

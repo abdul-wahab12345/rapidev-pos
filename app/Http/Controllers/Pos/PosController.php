@@ -29,7 +29,7 @@ class PosController extends Controller
             ->get(['id', 'name', 'color']);
 
         // Load initial products (first page, active only)
-        $products = Product::with(['category', 'stockLevels'])
+        $products = Product::with(['category', 'stockLevels', 'variants.stockLevels'])
             ->active()
             ->limit(48)
             ->orderBy('name')
@@ -103,7 +103,7 @@ class PosController extends Controller
         $query = $request->get('q', '');
         $categoryId = $request->get('category', '');
 
-        $products = Product::with(['category', 'stockLevels'])
+        $products = Product::with(['category', 'stockLevels', 'variants.stockLevels'])
             ->active()
             ->when($query, fn ($q) => $q->search($query))
             ->when($categoryId, fn ($q) => $q->where('category_id', $categoryId))
@@ -166,10 +166,11 @@ class PosController extends Controller
             'items.*.discount' => 'nullable|numeric|min:0',
             'items.*.name' => 'required|string',
             'items.*.variant_label' => 'nullable|string',
-            'payment.method' => 'required|in:cash,jazzcash,easypaisa,udhaar,mixed',
+            'payment.method' => 'required|in:cash,jazzcash,easypaisa,bank,udhaar,mixed',
             'payment.cash' => 'nullable|numeric|min:0',
             'payment.jazzcash' => 'nullable|numeric|min:0',
             'payment.easypaisa' => 'nullable|numeric|min:0',
+            'payment.bank' => 'nullable|numeric|min:0',
             'payment.udhaar' => 'nullable|numeric|min:0',
             'discount' => 'nullable|numeric|min:0',
             'notes' => 'nullable|string',
@@ -203,9 +204,10 @@ class PosController extends Controller
                 $cash      = round((float) ($validated['payment']['cash'] ?? 0), 2);
                 $jazzcash  = round((float) ($validated['payment']['jazzcash'] ?? 0), 2);
                 $easypaisa = round((float) ($validated['payment']['easypaisa'] ?? 0), 2);
+                $bank      = round((float) ($validated['payment']['bank'] ?? 0), 2);
                 $udhaar    = round((float) ($validated['payment']['udhaar'] ?? 0), 2);
-                $paid      = $cash + $jazzcash + $easypaisa + $udhaar;
-                $change    = max(0, $cash - ($total - $jazzcash - $easypaisa - $udhaar));
+                $paid      = $cash + $jazzcash + $easypaisa + $bank + $udhaar;
+                $change    = max(0, $cash - ($total - $jazzcash - $easypaisa - $bank - $udhaar));
 
                 // Create sale record
                 $sale = Sale::create([
@@ -224,6 +226,7 @@ class PosController extends Controller
                     'cash_amount'     => $cash,
                     'jazzcash_amount' => $jazzcash,
                     'easypaisa_amount'=> $easypaisa,
+                    'bank_amount'     => $bank,
                     'udhaar_amount'   => $udhaar,
                     'payment_method'  => $validated['payment']['method'],
                     'notes'           => $validated['notes'] ?? null,
@@ -383,25 +386,38 @@ class PosController extends Controller
 
     private function formatProductForPos(Product $product): array
     {
-        $stock = $product->stockLevels->sum('quantity');
+        $stock = $product->has_variants
+            ? $product->variants->flatMap->stockLevels->sum('quantity')
+            : $product->stockLevels->sum('quantity');
 
         return [
-            'id' => $product->id,
-            'name' => $product->name,
-            'name_ur' => $product->name_ur,
-            'sku' => $product->sku,
-            'barcode' => $product->barcode,
-            'unit' => $product->unit,
+            'id'            => $product->id,
+            'name'          => $product->name,
+            'name_ur'       => $product->name_ur,
+            'sku'           => $product->sku,
+            'barcode'       => $product->barcode,
+            'unit'          => $product->unit,
             'selling_price' => (float) $product->selling_price,
             'cost_price'    => (float) $product->cost_price,
-            'has_variants' => $product->has_variants,
-            'stock' => $stock,
-            'category_id' => $product->category_id,
-            'category' => $product->category ? [
-                'id' => $product->category->id,
-                'name' => $product->category->name,
+            'has_variants'  => $product->has_variants,
+            'stock'         => $stock,
+            'category_id'   => $product->category_id,
+            'category'      => $product->category ? [
+                'id'    => $product->category->id,
+                'name'  => $product->category->name,
                 'color' => $product->category->color,
             ] : null,
+            'variants' => $product->has_variants
+                ? $product->variants->where('is_active', true)->map(fn ($v) => [
+                    'id'            => $v->id,
+                    'label'         => $v->label,
+                    'size'          => $v->size,
+                    'color'         => $v->color,
+                    'selling_price' => (float) $v->selling_price,
+                    'cost_price'    => (float) $v->cost_price,
+                    'stock'         => $v->stockLevels->sum('quantity'),
+                ])->values()
+                : [],
         ];
     }
 }

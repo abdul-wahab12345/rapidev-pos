@@ -31,8 +31,9 @@ class AccountingService
         $cash      = (float) $sale->cash_amount;
         $jazzcash  = (float) $sale->jazzcash_amount;
         $easypaisa = (float) $sale->easypaisa_amount;
+        $bank      = (float) ($sale->bank_amount ?? 0);
         $udhaar    = (float) $sale->udhaar_amount;
-        $digital   = $jazzcash + $easypaisa;
+        $digital   = $jazzcash + $easypaisa + $bank; // all non-cash electronic payments → Bank account
 
         $lines = [];
 
@@ -41,7 +42,7 @@ class AccountingService
             $lines[] = ['account_id' => $accounts[self::CASH], 'debit' => $cash,    'credit' => 0, 'description' => 'Cash received'];
         }
         if ($digital > 0 && isset($accounts[self::BANK])) {
-            $lines[] = ['account_id' => $accounts[self::BANK], 'debit' => $digital, 'credit' => 0, 'description' => 'Digital payment'];
+            $lines[] = ['account_id' => $accounts[self::BANK], 'debit' => $digital, 'credit' => 0, 'description' => 'Digital/bank payment'];
         }
         if ($udhaar > 0 && isset($accounts[self::RECEIVABLE])) {
             $lines[] = ['account_id' => $accounts[self::RECEIVABLE], 'debit' => $udhaar, 'credit' => 0, 'description' => 'Udhaar (credit sale)'];

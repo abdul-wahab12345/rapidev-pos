@@ -19,6 +19,18 @@ class DashboardController extends Controller
     public function __invoke(): Response
     {
         $tenant = Auth::user()->tenant;
+
+        // Super-admins or users with no tenant assigned have nothing to show here
+        if (!$tenant) {
+            return Inertia::render('Dashboard', [
+                'stats'          => [],
+                'low_stock_peek' => [],
+                'recent_sales'   => [],
+                'business'       => ['default_branch_name' => null],
+                'no_tenant'      => true,
+            ]);
+        }
+
         $tenantId = $tenant->id;
         $branch = $tenant->defaultBranch();
 

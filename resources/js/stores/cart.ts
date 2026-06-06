@@ -1,6 +1,16 @@
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 
+export interface CartProductVariant {
+    id: string;
+    label: string;
+    size: string | null;
+    color: string | null;
+    selling_price: number;
+    cost_price: number;
+    stock: number;
+}
+
 export interface CartProduct {
     id: string;
     name: string;
@@ -12,6 +22,7 @@ export interface CartProduct {
     has_variants: boolean;
     stock: number;
     category: { id: string; name: string; color: string } | null;
+    variants: CartProductVariant[];
 }
 
 export interface CartItem {
@@ -37,7 +48,7 @@ export interface Customer {
     discount_percent: number;
 }
 
-export type PaymentMethod = 'cash' | 'jazzcash' | 'easypaisa' | 'udhaar' | 'mixed';
+export type PaymentMethod = 'cash' | 'jazzcash' | 'easypaisa' | 'bank' | 'udhaar' | 'mixed';
 
 export const useCartStore = defineStore('cart', () => {
     // ── State ──────────────────────────────────────────────
@@ -48,6 +59,7 @@ export const useCartStore = defineStore('cart', () => {
     const cashReceived = ref(0);
     const jazzcashAmount = ref(0);
     const easypaisaAmount = ref(0);
+    const bankAmount = ref(0);
 
     // Rate list
     const selectedRateListId = ref<string | null>(null);
@@ -78,10 +90,9 @@ export const useCartStore = defineStore('cart', () => {
             return Math.max(0, cashReceived.value - total.value);
         }
         if (paymentMethod.value === 'mixed') {
-            const cashPart = cashReceived.value;
-            const nonCash = jazzcashAmount.value + easypaisaAmount.value;
-            const udhaarPart = Math.max(0, total.value - cashPart - nonCash);
-            return Math.max(0, cashPart - (total.value - nonCash - udhaarPart));
+            const nonCash = jazzcashAmount.value + easypaisaAmount.value + bankAmount.value;
+            const udhaarPart = Math.max(0, total.value - cashReceived.value - nonCash);
+            return Math.max(0, cashReceived.value - (total.value - nonCash - udhaarPart));
         }
         return 0;
     });
@@ -89,7 +100,10 @@ export const useCartStore = defineStore('cart', () => {
     const udhaarAmount = computed(() => {
         if (paymentMethod.value === 'udhaar') return total.value;
         if (paymentMethod.value === 'mixed') {
-            return Math.max(0, total.value - cashReceived.value - jazzcashAmount.value - easypaisaAmount.value);
+            return Math.max(
+                0,
+                total.value - cashReceived.value - jazzcashAmount.value - easypaisaAmount.value - bankAmount.value,
+            );
         }
         return 0;
     });
@@ -99,7 +113,8 @@ export const useCartStore = defineStore('cart', () => {
         if (paymentMethod.value === 'udhaar' && !selectedCustomer.value) return false;
         if (paymentMethod.value === 'cash' && cashReceived.value < total.value) return false;
         if (paymentMethod.value === 'mixed') {
-            const totalCovered = cashReceived.value + jazzcashAmount.value + easypaisaAmount.value + udhaarAmount.value;
+            const totalCovered =
+                cashReceived.value + jazzcashAmount.value + easypaisaAmount.value + bankAmount.value + udhaarAmount.value;
             if (Math.abs(totalCovered - total.value) > 1) return false;
             if (udhaarAmount.value > 0 && !selectedCustomer.value) return false;
         }
@@ -108,7 +123,8 @@ export const useCartStore = defineStore('cart', () => {
 
     const chargeButtonLabel = computed(() => {
         if (items.value.length === 0) return 'Add items to start';
-        if (paymentMethod.value === 'cash' && cashReceived.value < total.value) return `Need Rs ${(total.value - cashReceived.value).toLocaleString()} more`;
+        if (paymentMethod.value === 'cash' && cashReceived.value < total.value)
+            return `Need Rs ${(total.value - cashReceived.value).toLocaleString()} more`;
         if (paymentMethod.value === 'udhaar' && !selectedCustomer.value) return 'Select customer for Udhaar';
         return `Charge Rs ${Math.round(total.value).toLocaleString()}`;
     });
@@ -137,7 +153,18 @@ export const useCartStore = defineStore('cart', () => {
     function addItem(product: CartProduct, variantId: string | null = null, variantLabel: string | null = null) {
         saleComplete.value = false;
         const ratePrice = getRatePrice(product.id, variantId);
-        const unitPrice = ratePrice !== null ? ratePrice : product.selling_price;
+
+        // For variant products, get the variant's price
+        let unitPrice: number;
+        if (variantId && product.variants) {
+            const variant = product.variants.find((v) => v.id === variantId);
+            const variantRatePrice = getRatePrice(product.id, variantId);
+            unitPrice = variantRatePrice !== null
+                ? variantRatePrice
+                : (variant?.selling_price ?? product.selling_price);
+        } else {
+            unitPrice = ratePrice !== null ? ratePrice : product.selling_price;
+        }
 
         const existing = items.value.find(
             (i) => i.product_id === product.id && i.variant_id === variantId,
@@ -145,6 +172,10 @@ export const useCartStore = defineStore('cart', () => {
         if (existing) {
             existing.quantity++;
         } else {
+            const variantCostPrice = variantId
+                ? (product.variants?.find((v) => v.id === variantId)?.cost_price ?? product.cost_price)
+                : product.cost_price;
+
             items.value.push({
                 product_id: product.id,
                 variant_id: variantId,
@@ -152,10 +183,12 @@ export const useCartStore = defineStore('cart', () => {
                 name_ur: product.name_ur ?? null,
                 variant_label: variantLabel,
                 unit_price: unitPrice,
-                cost_price: product.cost_price,
+                cost_price: variantCostPrice,
                 quantity: 1,
                 discount_per_unit: 0,
-                stock: product.stock,
+                stock: variantId
+                    ? (product.variants?.find((v) => v.id === variantId)?.stock ?? product.stock)
+                    : product.stock,
             });
         }
     }
@@ -175,9 +208,7 @@ export const useCartStore = defineStore('cart', () => {
     /** PKR off each unit (capped at unit price so line total never goes negative). */
     function setItemDiscount(index: number, discountPerUnit: number) {
         const item = items.value[index];
-        if (!item) {
-            return;
-        }
+        if (!item) return;
         const cap = Math.max(0, item.unit_price);
         item.discount_per_unit = Math.min(Math.max(0, discountPerUnit), cap);
     }
@@ -190,6 +221,7 @@ export const useCartStore = defineStore('cart', () => {
         cashReceived.value = 0;
         jazzcashAmount.value = 0;
         easypaisaAmount.value = 0;
+        bankAmount.value = 0;
         saleComplete.value = false;
         lastSale.value = null;
         showPaymentModal.value = false;
@@ -218,10 +250,19 @@ export const useCartStore = defineStore('cart', () => {
                       : 0,
                 jazzcash: paymentMethod.value === 'jazzcash'
                     ? total.value
-                    : jazzcashAmount.value,
+                    : paymentMethod.value === 'mixed'
+                      ? jazzcashAmount.value
+                      : 0,
                 easypaisa: paymentMethod.value === 'easypaisa'
                     ? total.value
-                    : easypaisaAmount.value,
+                    : paymentMethod.value === 'mixed'
+                      ? easypaisaAmount.value
+                      : 0,
+                bank: paymentMethod.value === 'bank'
+                    ? total.value
+                    : paymentMethod.value === 'mixed'
+                      ? bankAmount.value
+                      : 0,
                 udhaar: udhaarAmount.value,
             },
             discount: cartDiscount.value,
@@ -238,6 +279,7 @@ export const useCartStore = defineStore('cart', () => {
         cashReceived,
         jazzcashAmount,
         easypaisaAmount,
+        bankAmount,
         selectedRateListId,
         rateListPrices,
         showPaymentModal,

@@ -98,9 +98,29 @@ const paymentMethods = computed(() => [
     { id: 'cash',      label: t('common.cash') },
     { id: 'jazzcash',  label: t('common.jazzcash') },
     { id: 'easypaisa', label: t('common.easypaisa') },
+    { id: 'bank',      label: t('pos.bankTransfer') },
     { id: 'udhaar',    label: t('common.udhaar') },
     { id: 'mixed',     label: t('sales.split') },
 ]);
+
+// ── Variant picker ──────────────────────────────────────────────
+const variantPickerProduct = ref<CartProduct | null>(null);
+
+function handleProductClick(product: CartProduct) {
+    if (product.has_variants && product.variants?.length > 0) {
+        variantPickerProduct.value = product;
+    } else {
+        cart.addItem(product);
+        playAddToCart();
+    }
+}
+
+function selectVariant(variant: import('@/stores/cart').CartProductVariant) {
+    if (!variantPickerProduct.value) return;
+    cart.addItem(variantPickerProduct.value, variant.id, variant.label);
+    playAddToCart();
+    variantPickerProduct.value = null;
+}
 
 const displayChargeLabel = computed(() => {
     if (cart.items.length === 0) return t('pos.addItemsToStart');
@@ -420,25 +440,31 @@ onUnmounted(() => window.removeEventListener('keydown', handleKey));
                     <button
                         v-for="product in products"
                         :key="product.id"
-                        @click="cart.addItem(product); playAddToCart()"
-                        :disabled="product.stock === 0"
+                        @click="handleProductClick(product)"
+                        :disabled="product.stock === 0 && !product.has_variants"
                         :class="[
                             'group relative flex min-h-[88px] cursor-pointer flex-col justify-between rounded-xl border p-3 text-left transition-all',
-                            cart.items.find(i => i.product_id === product.id)
+                            cart.items.some(i => i.product_id === product.id)
                                 ? 'border-primary/60 bg-primary/10 ring-1 ring-primary/20'
-                                : product.stock === 0
+                                : product.stock === 0 && !product.has_variants
                                   ? 'cursor-not-allowed border-border bg-muted/30 opacity-50'
                                   : 'border-border bg-card hover:border-foreground/20 hover:bg-accent',
                         ]"
                     >
-                        <!-- In-cart qty badge -->
+                        <!-- In-cart qty badge (sum across all variants) -->
                         <span
-                            v-if="cart.items.find(i => i.product_id === product.id)"
+                            v-if="cart.items.some(i => i.product_id === product.id)"
                             class="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground"
-                        >{{ cart.items.find(i => i.product_id === product.id)?.quantity }}</span>
+                        >{{ cart.items.filter(i => i.product_id === product.id).reduce((s,i) => s + i.quantity, 0) }}</span>
 
-                        <!-- Out of stock -->
-                        <span v-if="product.stock === 0" class="absolute inset-0 flex items-center justify-center rounded-xl text-xs font-semibold text-muted-foreground">
+                        <!-- Variants badge -->
+                        <span
+                            v-else-if="product.has_variants"
+                            class="absolute right-2 top-2 rounded-full bg-violet-500/15 px-1.5 py-0.5 text-[9px] font-semibold text-violet-600 dark:text-violet-400"
+                        >{{ product.variants?.length }}v</span>
+
+                        <!-- Out of stock (simple products only) -->
+                        <span v-if="product.stock === 0 && !product.has_variants" class="absolute inset-0 flex items-center justify-center rounded-xl text-xs font-semibold text-muted-foreground">
                             {{ t('pos.outOfStock') }}
                         </span>
 
@@ -447,10 +473,12 @@ onUnmounted(() => window.removeEventListener('keydown', handleKey));
 
                         <div class="mt-1.5 flex items-end justify-between gap-1">
                             <div class="flex flex-col leading-none">
-                                <span class="text-sm font-bold text-primary">{{ fmt(displayPrice(product)) }}</span>
-                                <span v-if="cart.getRatePrice(product.id, null) !== null" class="text-[10px] text-muted-foreground line-through">{{ fmt(product.selling_price) }}</span>
+                                <span class="text-sm font-bold text-primary">
+                                    {{ product.has_variants ? t('pos.selectVariant') : fmt(displayPrice(product)) }}
+                                </span>
+                                <span v-if="!product.has_variants && cart.getRatePrice(product.id, null) !== null" class="text-[10px] text-muted-foreground line-through">{{ fmt(product.selling_price) }}</span>
                             </div>
-                            <span class="text-[11px] text-muted-foreground">{{ product.stock > 0 ? `×${product.stock}` : '' }}</span>
+                            <span v-if="!product.has_variants" class="text-[11px] text-muted-foreground">{{ product.stock > 0 ? `×${product.stock}` : '' }}</span>
                         </div>
                     </button>
                 </div>
@@ -484,7 +512,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKey));
         <!-- ════════════════════════════════════════
              RIGHT — Cart
         ════════════════════════════════════════ -->
-        <div class="flex w-[340px] shrink-0 flex-col bg-card xl:w-[380px]">
+        <div class="flex w-[400px] shrink-0 flex-col bg-card xl:w-[440px]">
 
             <!-- Rate list selector (only shown when rate lists exist) -->
             <div v-if="rateLists.length > 0" class="shrink-0 border-b border-border bg-muted/30 px-4 py-2">
@@ -826,6 +854,73 @@ onUnmounted(() => window.removeEventListener('keydown', handleKey));
                         </span>
                     </div>
 
+                    <!-- Bank transfer (single method) -->
+                    <div v-if="cart.paymentMethod === 'bank'" class="mt-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                        {{ t('pos.bankTransferHint') }}
+                    </div>
+
+                    <!-- Split (mixed) inputs -->
+                    <div v-if="cart.paymentMethod === 'mixed' && cart.items.length > 0" class="mt-3 space-y-2">
+                        <div class="grid grid-cols-2 gap-2">
+                            <!-- Cash -->
+                            <div class="flex flex-col gap-1">
+                                <span class="text-[11px] font-medium text-muted-foreground">{{ t('common.cash') }}</span>
+                                <input
+                                    v-model.number="cart.cashReceived"
+                                    type="number" min="0" :placeholder="'0'"
+                                    class="w-full rounded-lg border border-input bg-background px-2 py-1.5 text-right text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                                />
+                            </div>
+                            <!-- JazzCash -->
+                            <div class="flex flex-col gap-1">
+                                <span class="text-[11px] font-medium text-muted-foreground">{{ t('common.jazzcash') }}</span>
+                                <input
+                                    v-model.number="cart.jazzcashAmount"
+                                    type="number" min="0" :placeholder="'0'"
+                                    class="w-full rounded-lg border border-input bg-background px-2 py-1.5 text-right text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                                />
+                            </div>
+                            <!-- Easypaisa -->
+                            <div class="flex flex-col gap-1">
+                                <span class="text-[11px] font-medium text-muted-foreground">{{ t('common.easypaisa') }}</span>
+                                <input
+                                    v-model.number="cart.easypaisaAmount"
+                                    type="number" min="0" :placeholder="'0'"
+                                    class="w-full rounded-lg border border-input bg-background px-2 py-1.5 text-right text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                                />
+                            </div>
+                            <!-- Bank transfer -->
+                            <div class="flex flex-col gap-1">
+                                <span class="text-[11px] font-medium text-muted-foreground">{{ t('pos.bankTransfer') }}</span>
+                                <input
+                                    v-model.number="cart.bankAmount"
+                                    type="number" min="0" :placeholder="'0'"
+                                    class="w-full rounded-lg border border-input bg-background px-2 py-1.5 text-right text-sm focus:border-ring focus:outline-none focus:ring-1 focus:ring-ring"
+                                />
+                            </div>
+                        </div>
+                        <!-- Running total indicator -->
+                        <div class="flex items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-xs">
+                            <span class="text-muted-foreground">{{ t('pos.splitCovered') }}</span>
+                            <span :class="[
+                                'font-bold tabular-nums',
+                                Math.abs((cart.cashReceived + cart.jazzcashAmount + cart.easypaisaAmount + cart.bankAmount) - cart.total) <= 1
+                                    ? 'text-green-600 dark:text-green-400'
+                                    : 'text-amber-600 dark:text-amber-400'
+                            ]">
+                                {{ fmt(cart.cashReceived + cart.jazzcashAmount + cart.easypaisaAmount + cart.bankAmount) }}
+                                / {{ fmt(cart.total) }}
+                            </span>
+                        </div>
+                        <p v-if="cart.udhaarAmount > 0" class="text-xs text-amber-600 dark:text-amber-400">
+                            {{ t('pos.splitUdhaarRemainder', { amount: fmt(cart.udhaarAmount) }) }}
+                        </p>
+                        <p v-if="cart.udhaarAmount > 0 && !cart.selectedCustomer" class="flex items-center gap-1 text-xs text-destructive">
+                            <AlertTriangle class="h-3.5 w-3.5" />
+                            {{ t('pos.udhaarWarning') }}
+                        </p>
+                    </div>
+
                     <p v-if="cart.paymentMethod === 'udhaar' && !cart.selectedCustomer" class="mt-2 flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
                         <AlertTriangle class="h-3.5 w-3.5" />
                         {{ t('pos.udhaarWarning') }}
@@ -1017,4 +1112,53 @@ onUnmounted(() => window.removeEventListener('keydown', handleKey));
         </Teleport>
 
     </PosLayout>
+
+    <!-- ── Variant Picker ───────────────────────────────────── -->
+    <Teleport to="body">
+        <div
+            v-if="variantPickerProduct"
+            class="fixed inset-0 z-50 flex items-center justify-center p-4"
+            @click.self="variantPickerProduct = null"
+        >
+            <div class="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+            <div class="relative z-10 w-full max-w-sm rounded-2xl border border-border bg-card shadow-2xl">
+                <!-- Header -->
+                <div class="flex items-center justify-between border-b border-border px-5 py-4">
+                    <div>
+                        <h3 class="font-semibold text-foreground">{{ variantPickerProduct.name }}</h3>
+                        <p class="text-xs text-muted-foreground">{{ t('pos.selectVariantHint') }}</p>
+                    </div>
+                    <button
+                        @click="variantPickerProduct = null"
+                        class="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"
+                    >
+                        <X class="h-4 w-4" />
+                    </button>
+                </div>
+                <!-- Variants -->
+                <div class="max-h-80 overflow-y-auto p-3 space-y-2">
+                    <button
+                        v-for="v in variantPickerProduct.variants"
+                        :key="v.id"
+                        @click="selectVariant(v)"
+                        :disabled="v.stock === 0"
+                        :class="[
+                            'w-full flex items-center justify-between rounded-xl border px-4 py-3 text-left transition-all',
+                            v.stock === 0
+                                ? 'cursor-not-allowed border-border bg-muted/30 opacity-50'
+                                : 'border-border bg-background hover:border-primary/60 hover:bg-primary/5 active:scale-[0.98]',
+                        ]"
+                    >
+                        <div class="flex flex-col gap-0.5">
+                            <span class="font-medium text-foreground">{{ v.label }}</span>
+                            <span class="text-xs text-muted-foreground">
+                                {{ v.stock === 0 ? t('pos.outOfStock') : `${t('pos.inStock')}: ${v.stock}` }}
+                            </span>
+                        </div>
+                        <span class="text-base font-bold text-primary">{{ fmt(v.selling_price) }}</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </Teleport>
 </template>
