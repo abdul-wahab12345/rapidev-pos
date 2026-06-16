@@ -9,8 +9,8 @@ import { formatMoney, isUrdu } from '@/utils/format';
 import posService from '@/services/posService';
 import axios from 'axios';
 import {
-    AlertTriangle, Check, ChevronDown, ListOrdered, Minus, Percent,
-    Plus, Search, ShoppingCart, Tag, User, UserPlus, X,
+    AlertTriangle, Calculator, Check, ChevronDown, ListOrdered, Minus, Percent,
+    Plus, Search, ShoppingCart, Tag, Truck, User, UserPlus, X,
 } from 'lucide-vue-next';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -102,6 +102,48 @@ const paymentMethods = computed(() => [
     { id: 'udhaar',    label: t('common.udhaar') },
     { id: 'mixed',     label: t('sales.split') },
 ]);
+
+// ── Area Calculator ─────────────────────────────────────────────
+const showAreaCalc = ref(false);
+const areaCalcUnit = ref<'m' | 'ft'>('m');   // sq meters or sq feet input
+const areaCalcWidth = ref<number | ''>('');
+const areaCalcLength = ref<number | ''>('');
+const areaCalcWastage = ref(10);
+const areaCalcSqMPerBox = ref<number | ''>('');
+
+// Raw area in the selected unit
+const areaCalcRawArea = computed(() => {
+    const w = Number(areaCalcWidth.value);
+    const l = Number(areaCalcLength.value);
+    return w > 0 && l > 0 ? Math.round(w * l * 100) / 100 : 0;
+});
+// Always convert to sq meters for box calculation
+const SQ_FT_TO_SQ_M = 0.092903;
+const areaCalcSqM = computed(() => {
+    if (!areaCalcRawArea.value) return 0;
+    return areaCalcUnit.value === 'ft'
+        ? Math.round(areaCalcRawArea.value * SQ_FT_TO_SQ_M * 100) / 100
+        : areaCalcRawArea.value;
+});
+// Also express in the other unit for display
+const areaCalcSqFt = computed(() => {
+    if (!areaCalcRawArea.value) return 0;
+    return areaCalcUnit.value === 'm'
+        ? Math.round(areaCalcRawArea.value / SQ_FT_TO_SQ_M * 100) / 100
+        : areaCalcRawArea.value;
+});
+const areaCalcSqMWithWastage = computed(() => {
+    if (!areaCalcSqM.value) return 0;
+    return Math.round(areaCalcSqM.value * (1 + areaCalcWastage.value / 100) * 100) / 100;
+});
+const areaCalcSqFtWithWastage = computed(() =>
+    Math.round(areaCalcSqMWithWastage.value / SQ_FT_TO_SQ_M * 100) / 100
+);
+const areaCalcBoxesNeeded = computed(() => {
+    const sqm = Number(areaCalcSqMPerBox.value);
+    if (!areaCalcSqMWithWastage.value || !sqm) return null;
+    return Math.ceil(areaCalcSqMWithWastage.value / sqm);
+});
 
 // ── Variant picker ──────────────────────────────────────────────
 const variantPickerProduct = ref<CartProduct | null>(null);
@@ -545,6 +587,21 @@ onUnmounted(() => window.removeEventListener('keydown', handleKey));
                     </span>
 
                     <div class="ms-auto flex items-center gap-2">
+                        <!-- Area Calculator button -->
+                        <button
+                            @click="showAreaCalc = !showAreaCalc"
+                            :class="[
+                                'flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors',
+                                showAreaCalc
+                                    ? 'border-blue-500/60 bg-blue-500/10 text-blue-600 dark:text-blue-400'
+                                    : 'border-border text-muted-foreground hover:border-foreground/30 hover:text-foreground',
+                            ]"
+                            title="Area Calculator"
+                        >
+                            <Calculator class="h-3.5 w-3.5" />
+                            <span class="hidden xl:inline">Calc</span>
+                        </button>
+
                         <!-- ★ Customer button — always visible ★ -->
                         <button
                             @click="cart.showCustomerPanel = !cart.showCustomerPanel; customerSearch = ''"
@@ -573,6 +630,90 @@ onUnmounted(() => window.removeEventListener('keydown', handleKey));
                             }"
                             class="text-xs text-muted-foreground hover:text-destructive transition-colors"
                         >{{ t('common.clear') }}</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ── Area Calculator panel ── -->
+            <div v-if="showAreaCalc" class="shrink-0 border-b border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 px-4 py-3">
+                <!-- Header row -->
+                <div class="flex items-center justify-between mb-2.5">
+                    <div class="flex items-center gap-1.5">
+                        <Calculator class="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                        <p class="text-xs font-semibold text-blue-700 dark:text-blue-300">Area Calculator</p>
+                    </div>
+                    <!-- Unit toggle -->
+                    <div class="flex items-center gap-1">
+                        <button
+                            @click="areaCalcUnit = 'm'"
+                            :class="['rounded px-2 py-0.5 text-xs font-semibold transition-colors',
+                                areaCalcUnit === 'm'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900']"
+                        >m²</button>
+                        <button
+                            @click="areaCalcUnit = 'ft'"
+                            :class="['rounded px-2 py-0.5 text-xs font-semibold transition-colors',
+                                areaCalcUnit === 'ft'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900']"
+                        >sq ft</button>
+                        <button @click="showAreaCalc = false" class="ms-1 text-muted-foreground hover:text-foreground">
+                            <X class="h-3.5 w-3.5" />
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Inputs grid -->
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="block text-xs text-muted-foreground mb-1">
+                            Width ({{ areaCalcUnit === 'm' ? 'meters' : 'feet' }})
+                        </label>
+                        <input v-model.number="areaCalcWidth" type="number" step="0.01" min="0"
+                            :placeholder="areaCalcUnit === 'm' ? 'e.g. 4.5' : 'e.g. 15'"
+                            class="w-full rounded-md border border-blue-200 dark:border-blue-700 bg-white dark:bg-blue-950 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    </div>
+                    <div>
+                        <label class="block text-xs text-muted-foreground mb-1">
+                            Length ({{ areaCalcUnit === 'm' ? 'meters' : 'feet' }})
+                        </label>
+                        <input v-model.number="areaCalcLength" type="number" step="0.01" min="0"
+                            :placeholder="areaCalcUnit === 'm' ? 'e.g. 6' : 'e.g. 20'"
+                            class="w-full rounded-md border border-blue-200 dark:border-blue-700 bg-white dark:bg-blue-950 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    </div>
+                    <div>
+                        <label class="block text-xs text-muted-foreground mb-1">Wastage %</label>
+                        <input v-model.number="areaCalcWastage" type="number" step="1" min="0" max="50"
+                            class="w-full rounded-md border border-blue-200 dark:border-blue-700 bg-white dark:bg-blue-950 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    </div>
+                    <div>
+                        <label class="block text-xs text-muted-foreground mb-1">m² per Box</label>
+                        <input v-model.number="areaCalcSqMPerBox" type="number" step="0.0001" min="0" placeholder="from product"
+                            class="w-full rounded-md border border-blue-200 dark:border-blue-700 bg-white dark:bg-blue-950 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    </div>
+                </div>
+
+                <!-- Results -->
+                <div v-if="areaCalcRawArea > 0" class="mt-2 rounded-md bg-blue-100 dark:bg-blue-900/50 px-3 py-2 text-xs space-y-1">
+                    <div class="flex justify-between">
+                        <span class="text-muted-foreground">Area</span>
+                        <span class="font-medium">
+                            {{ areaCalcSqM }} m²
+                            <span class="text-muted-foreground font-normal"> / {{ areaCalcSqFt }} sq ft</span>
+                        </span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-muted-foreground">With {{ areaCalcWastage }}% wastage</span>
+                        <span class="font-medium">
+                            {{ areaCalcSqMWithWastage }} m²
+                            <span class="text-muted-foreground font-normal"> / {{ areaCalcSqFtWithWastage }} sq ft</span>
+                        </span>
+                    </div>
+                    <div v-if="areaCalcBoxesNeeded !== null"
+                        class="flex justify-between text-blue-700 dark:text-blue-300 font-bold border-t border-blue-200 dark:border-blue-700 pt-1 mt-1">
+                        <span>Boxes needed</span>
+                        <span>{{ areaCalcBoxesNeeded }} boxes</span>
                     </div>
                 </div>
             </div>
@@ -696,7 +837,16 @@ onUnmounted(() => window.removeEventListener('keydown', handleKey));
                                 >
                                     <Minus class="h-3.5 w-3.5" />
                                 </button>
-                                <span class="w-7 text-center text-[13px] font-bold text-foreground">{{ item.quantity }}</span>
+                                <!-- Editable quantity input -->
+                                <input
+                                    :value="item.quantity"
+                                    @change="cart.updateQuantity(idx, Math.max(1, parseInt(($event.target as HTMLInputElement).value) || 1))"
+                                    @focus="($event.target as HTMLInputElement).select()"
+                                    type="number"
+                                    min="1"
+                                    :max="item.stock"
+                                    class="w-10 rounded border border-border bg-background text-center text-[13px] font-bold text-foreground focus:outline-none focus:ring-1 focus:ring-ring py-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                />
                                 <button
                                     @click="cart.updateQuantity(idx, item.quantity + 1)"
                                     :disabled="item.quantity >= item.stock"
@@ -812,6 +962,25 @@ onUnmounted(() => window.removeEventListener('keydown', handleKey));
                         <button @click="discountInput = 0; cart.cartDiscount = 0" class="text-muted-foreground hover:text-destructive transition-colors">
                             <X class="h-3.5 w-3.5" />
                         </button>
+                    </div>
+
+                    <!-- ★ Delivery Fee row ★ -->
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-1.5">
+                            <Truck class="h-3.5 w-3.5 text-muted-foreground" />
+                            <span class="text-[13px] font-medium text-muted-foreground">Delivery Fee</span>
+                        </div>
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-xs text-muted-foreground">Rs</span>
+                            <input
+                                v-model.number="cart.deliveryFee"
+                                type="number"
+                                min="0"
+                                step="50"
+                                placeholder="0"
+                                class="w-24 rounded-md border border-input bg-background px-2 py-1 text-right text-sm tabular-nums text-foreground focus:outline-none focus:ring-1 focus:ring-ring [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            />
+                        </div>
                     </div>
 
                     <!-- Total row subtotal section -->

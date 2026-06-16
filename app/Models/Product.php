@@ -12,6 +12,9 @@ class Product extends TenantAware
         'tenant_id', 'category_id', 'name', 'name_ur', 'sku', 'barcode',
         'description', 'unit', 'cost_price', 'selling_price',
         'has_variants', 'reorder_level', 'image', 'is_active',
+        // Marble / Tiles attributes
+        'material_type', 'finish', 'origin', 'thickness_mm',
+        'tile_width_in', 'tile_height_in', 'tiles_per_box', 'sq_m_per_box',
     ];
 
     protected $casts = [
@@ -20,7 +23,30 @@ class Product extends TenantAware
         'has_variants'   => 'boolean',
         'is_active'      => 'boolean',
         'reorder_level'  => 'integer',
+        'thickness_mm'   => 'decimal:2',
+        'tile_width_in'  => 'decimal:2',
+        'tile_height_in' => 'decimal:2',
+        'tiles_per_box'  => 'integer',
+        'sq_m_per_box'   => 'decimal:4',
     ];
+
+    /**
+     * Auto-compute sq_m_per_box from tile dimensions (inches) when saving.
+     * 1 inch = 0.0254 m  →  sq_m = (w_in × 0.0254) × (h_in × 0.0254) × tiles_per_box
+     */
+    protected static function booted(): void
+    {
+        parent::booted(); // ← must call this first so TenantAware sets UUID + tenant_id
+
+        static::saving(function (Product $product) {
+            if ($product->tile_width_in && $product->tile_height_in && $product->tiles_per_box) {
+                $product->sq_m_per_box = round(
+                    ($product->tile_width_in * 0.0254) * ($product->tile_height_in * 0.0254) * $product->tiles_per_box,
+                    4
+                );
+            }
+        });
+    }
 
     // Profit margin percentage
     public function getMarginAttribute(): float

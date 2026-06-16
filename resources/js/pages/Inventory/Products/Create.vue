@@ -11,6 +11,9 @@ const { t } = useI18n();
 defineProps<{
     categories: Array<{ id: string; name: string; color: string }>;
     units: Array<{ value: string; label: string }>;
+    materialTypes: Array<{ value: string; label: string }>;
+    finishOptions: Array<{ value: string; label: string }>;
+    originOptions: string[];
 }>();
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
@@ -31,7 +34,14 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
                 <p class="text-sm text-muted-foreground mt-0.5">{{ t('inventory.addProductSubtitle') }}</p>
             </div>
 
-            <ProductForm mode="create" :categories="categories" :units="units" />
+            <ProductForm
+                mode="create"
+                :categories="categories"
+                :units="units"
+                :material-types="materialTypes"
+                :finish-options="finishOptions"
+                :origin-options="originOptions"
+            />
 
         </div>
     </AppLayout>

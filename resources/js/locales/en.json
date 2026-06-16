@@ -233,6 +233,8 @@
   "nav.stockManagement": "Stock Management",
   "nav.sales": "Sales",
   "nav.salesOrders": "Sales Orders",
+  "nav.quotations": "Quotations",
+  "nav.deliveryChallans": "Delivery Challans",
   "nav.returnsRefunds": "Returns & Refunds",
   "nav.customers": "Customers",
   "nav.rateLists": "Rate Lists",

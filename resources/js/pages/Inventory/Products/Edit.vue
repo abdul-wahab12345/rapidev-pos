@@ -25,6 +25,15 @@ const props = defineProps<{
         category_id: string | null;
         category: { id: string; name: string; color: string } | null;
         total_stock: number;
+        // Material attributes
+        material_type: string | null;
+        finish: string | null;
+        origin: string | null;
+        thickness_mm: number | null;
+        tile_width_in: number | null;
+        tile_height_in: number | null;
+        tiles_per_box: number | null;
+        sq_m_per_box: number | null;
         variants: Array<{
             id: string;
             size: string | null;
@@ -38,6 +47,9 @@ const props = defineProps<{
     };
     categories: Array<{ id: string; name: string; color: string }>;
     units: Array<{ value: string; label: string }>;
+    materialTypes: Array<{ value: string; label: string }>;
+    finishOptions: Array<{ value: string; label: string }>;
+    originOptions: string[];
 }>();
 
 const breadcrumbs = computed<BreadcrumbItem[]>(() => [
@@ -66,7 +78,15 @@ const headTitle = computed(() => t('inventory.editProductHead', { name: props.pr
                 </div>
             </div>
 
-            <ProductForm mode="edit" :product="product" :categories="categories" :units="units" />
+            <ProductForm
+                mode="edit"
+                :product="product"
+                :categories="categories"
+                :units="units"
+                :material-types="materialTypes"
+                :finish-options="finishOptions"
+                :origin-options="originOptions"
+            />
 
         </div>
     </AppLayout>

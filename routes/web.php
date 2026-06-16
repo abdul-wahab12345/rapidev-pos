@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Accounts\AccountsController;
+use App\Http\Controllers\DeliveryChallans\DeliveryChallanController;
+use App\Http\Controllers\Quotations\QuotationController;
 use App\Http\Controllers\BusinessSettingsController;
 use App\Http\Controllers\Customers\CustomersController;
 use App\Http\Controllers\DashboardController;
@@ -155,6 +157,29 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('areas', [LocationsController::class, 'storeArea'])->name('areas.store');
         Route::patch('areas/{area}', [LocationsController::class, 'updateArea'])->name('areas.update');
         Route::delete('areas/{area}', [LocationsController::class, 'destroyArea'])->name('areas.destroy');
+    });
+
+    // ── Quotations ─────────────────────────────────────────
+    Route::prefix('quotations')->name('quotations.')->group(function () {
+        Route::get('/', [QuotationController::class, 'index'])->name('index');
+        Route::get('/create', [QuotationController::class, 'create'])->name('create');
+        Route::post('/', [QuotationController::class, 'store'])->name('store');
+        Route::get('/{quotation}', [QuotationController::class, 'show'])->name('show');
+        Route::get('/{quotation}/edit', [QuotationController::class, 'edit'])->name('edit');
+        Route::put('/{quotation}', [QuotationController::class, 'update'])->name('update');
+        Route::patch('/{quotation}/status', [QuotationController::class, 'updateStatus'])->name('update-status');
+        Route::post('/{quotation}/convert', [QuotationController::class, 'convert'])->name('convert');
+        Route::delete('/{quotation}', [QuotationController::class, 'destroy'])->name('destroy');
+    });
+
+    // ── Delivery Challans ──────────────────────────────────
+    Route::prefix('challans')->name('challans.')->group(function () {
+        Route::get('/', [DeliveryChallanController::class, 'index'])->name('index');
+        Route::get('/create', [DeliveryChallanController::class, 'create'])->name('create');
+        Route::post('/', [DeliveryChallanController::class, 'store'])->name('store');
+        Route::get('/{challan}', [DeliveryChallanController::class, 'show'])->name('show');
+        Route::patch('/{challan}/status', [DeliveryChallanController::class, 'updateStatus'])->name('update-status');
+        Route::delete('/{challan}', [DeliveryChallanController::class, 'destroy'])->name('destroy');
     });
 
     // ── Business Settings ──────────────────────────────────

@@ -23,6 +23,12 @@ export interface CartProduct {
     stock: number;
     category: { id: string; name: string; color: string } | null;
     variants: CartProductVariant[];
+    // Material attributes (marble/tile/ceramic)
+    material_type?: string | null;
+    sq_m_per_box?: number | null;
+    tile_width_in?: number | null;
+    tile_height_in?: number | null;
+    tiles_per_box?: number | null;
 }
 
 export interface CartItem {
@@ -55,6 +61,7 @@ export const useCartStore = defineStore('cart', () => {
     const items = ref<CartItem[]>([]);
     const selectedCustomer = ref<Customer | null>(null);
     const cartDiscount = ref(0); // PKR cart-level discount
+    const deliveryFee = ref(0);  // PKR delivery / transport charge
     const paymentMethod = ref<PaymentMethod>('cash');
     const cashReceived = ref(0);
     const jazzcashAmount = ref(0);
@@ -83,7 +90,7 @@ export const useCartStore = defineStore('cart', () => {
         items.value.reduce((s, i) => s + (i.unit_price * i.quantity) - lineDiscountTotal(i), 0),
     );
 
-    const total = computed(() => Math.max(0, subtotal.value - cartDiscount.value));
+    const total = computed(() => Math.max(0, subtotal.value - cartDiscount.value + deliveryFee.value));
 
     const changeAmount = computed(() => {
         if (paymentMethod.value === 'cash') {
@@ -217,6 +224,7 @@ export const useCartStore = defineStore('cart', () => {
         items.value = [];
         selectedCustomer.value = null;
         cartDiscount.value = 0;
+        deliveryFee.value = 0;
         paymentMethod.value = 'cash';
         cashReceived.value = 0;
         jazzcashAmount.value = 0;
@@ -266,6 +274,7 @@ export const useCartStore = defineStore('cart', () => {
                 udhaar: udhaarAmount.value,
             },
             discount: cartDiscount.value,
+            delivery_fee: deliveryFee.value,
             notes: notes,
             rate_list_id: selectedRateListId.value ?? null,
         };
@@ -275,6 +284,7 @@ export const useCartStore = defineStore('cart', () => {
         items,
         selectedCustomer,
         cartDiscount,
+        deliveryFee,
         paymentMethod,
         cashReceived,
         jazzcashAmount,

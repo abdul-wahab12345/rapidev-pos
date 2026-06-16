@@ -172,7 +172,8 @@ class PosController extends Controller
             'payment.easypaisa' => 'nullable|numeric|min:0',
             'payment.bank' => 'nullable|numeric|min:0',
             'payment.udhaar' => 'nullable|numeric|min:0',
-            'discount' => 'nullable|numeric|min:0',
+            'discount'     => 'nullable|numeric|min:0',
+            'delivery_fee' => 'nullable|numeric|min:0',
             'notes' => 'nullable|string',
             'rate_list_id' => 'nullable|exists:rate_lists,id',
         ]);
@@ -190,6 +191,7 @@ class PosController extends Controller
                 // Calculate totals — values come in as decimal PKR, stored as decimal PKR
                 $subtotal     = 0.0;
                 $cartDiscount = round((float) ($validated['discount'] ?? 0), 2);
+                $deliveryFee  = round((float) ($validated['delivery_fee'] ?? 0), 2);
 
                 foreach ($validated['items'] as $item) {
                     $itemDiscount = round((float) ($item['discount'] ?? 0), 2);
@@ -198,7 +200,7 @@ class PosController extends Controller
                     $subtotal    += $lineTotal;
                 }
 
-                $total = round($subtotal - $cartDiscount, 2);
+                $total = round($subtotal - $cartDiscount + $deliveryFee, 2);
 
                 // Payment breakdown
                 $cash      = round((float) ($validated['payment']['cash'] ?? 0), 2);
@@ -219,6 +221,7 @@ class PosController extends Controller
                     'status'          => 'completed',
                     'subtotal'        => $subtotal,
                     'discount'        => $cartDiscount,
+                    'delivery_fee'    => $deliveryFee,
                     'tax'             => 0,
                     'total'           => $total,
                     'paid'            => $paid,
@@ -401,6 +404,14 @@ class PosController extends Controller
             'cost_price'    => (float) $product->cost_price,
             'has_variants'  => $product->has_variants,
             'stock'         => $stock,
+            // Material attributes for area calculator
+            'material_type' => $product->material_type,
+            'finish'        => $product->finish,
+            'origin'        => $product->origin,
+            'sq_m_per_box'  => $product->sq_m_per_box ? (float) $product->sq_m_per_box : null,
+            'tile_width_in' => $product->tile_width_in ? (float) $product->tile_width_in : null,
+            'tile_height_in'=> $product->tile_height_in ? (float) $product->tile_height_in : null,
+            'tiles_per_box' => $product->tiles_per_box,
             'category_id'   => $product->category_id,
             'category'      => $product->category ? [
                 'id'    => $product->category->id,

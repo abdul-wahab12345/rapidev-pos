@@ -11,7 +11,7 @@ class StockLevel extends Model
     public $incrementing = false;
 
     protected $fillable = [
-        'tenant_id', 'branch_id', 'product_id', 'variant_id', 'quantity', 'reserved_qty',
+        'tenant_id', 'branch_id', 'product_id', 'variant_id', 'lot_number', 'quantity', 'reserved_qty',
     ];
 
     protected $casts = [
