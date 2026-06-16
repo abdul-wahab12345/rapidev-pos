@@ -1244,26 +1244,50 @@ onUnmounted(() => window.removeEventListener('keydown', handleKey));
                         <div v-if="cart.cartDiscount > 0" class="flex justify-between text-green-600 dark:text-green-400">
                             <span>{{ t('common.discount') }}</span><span>−{{ fmt(cart.cartDiscount) }}</span>
                         </div>
+                        <div v-if="cart.deliveryFee > 0" class="flex justify-between text-muted-foreground">
+                            <span class="flex items-center gap-1"><Truck class="h-3 w-3" /> Delivery Fee</span>
+                            <span class="tabular-nums text-foreground">{{ fmt(cart.deliveryFee) }}</span>
+                        </div>
                         <div class="mt-1 flex justify-between">
                             <span class="font-bold text-foreground">{{ t('common.total') }}</span>
                             <span class="text-2xl font-black text-primary">{{ fmt(cart.total) }}</span>
                         </div>
                     </div>
 
-                    <div class="mt-4 rounded-xl bg-muted/60 px-4 py-3 text-sm">
+                    <div class="mt-4 rounded-xl bg-muted/60 px-4 py-3 text-sm space-y-1">
                         <div class="flex justify-between text-muted-foreground">
                             <span>{{ t('common.method') }}</span>
                             <span class="capitalize font-medium text-foreground">{{ cart.paymentMethod }}</span>
                         </div>
-                        <div v-if="cart.paymentMethod === 'cash'" class="mt-1 flex justify-between text-muted-foreground">
+                        <!-- Cash single method -->
+                        <div v-if="cart.paymentMethod === 'cash'" class="flex justify-between text-muted-foreground">
                             <span>{{ t('pos.change') }}</span>
                             <span class="font-bold text-green-600 dark:text-green-400">{{ fmt(cart.changeAmount) }}</span>
                         </div>
-                        <div v-if="cart.udhaarAmount > 0" class="mt-1 flex justify-between text-muted-foreground">
+                        <!-- Split breakdown -->
+                        <template v-if="cart.paymentMethod === 'mixed'">
+                            <div v-if="cart.cashReceived > 0" class="flex justify-between text-muted-foreground">
+                                <span>{{ t('common.cash') }}</span>
+                                <span class="tabular-nums text-foreground">{{ fmt(cart.cashReceived) }}</span>
+                            </div>
+                            <div v-if="cart.bankAmount > 0" class="flex justify-between text-muted-foreground">
+                                <span>{{ t('pos.bankTransfer') }}</span>
+                                <span class="tabular-nums text-foreground">{{ fmt(cart.bankAmount) }}</span>
+                            </div>
+                            <div v-if="cart.jazzcashAmount > 0" class="flex justify-between text-muted-foreground">
+                                <span>{{ t('common.jazzcash') }}</span>
+                                <span class="tabular-nums text-foreground">{{ fmt(cart.jazzcashAmount) }}</span>
+                            </div>
+                            <div v-if="cart.easypaisaAmount > 0" class="flex justify-between text-muted-foreground">
+                                <span>{{ t('common.easypaisa') }}</span>
+                                <span class="tabular-nums text-foreground">{{ fmt(cart.easypaisaAmount) }}</span>
+                            </div>
+                        </template>
+                        <div v-if="cart.udhaarAmount > 0" class="flex justify-between text-muted-foreground">
                             <span>{{ t('common.udhaar') }}</span>
                             <span class="font-bold text-amber-600 dark:text-amber-400">{{ fmt(cart.udhaarAmount) }}</span>
                         </div>
-                        <div v-if="cart.selectedCustomer" class="mt-1 flex justify-between text-muted-foreground">
+                        <div v-if="cart.selectedCustomer" class="flex justify-between text-muted-foreground">
                             <span>{{ t('pos.customerWord') }}</span>
                             <span class="font-medium text-foreground">{{ cart.selectedCustomer.name }}</span>
                         </div>

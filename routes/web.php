@@ -8,6 +8,7 @@ use App\Http\Controllers\Customers\CustomersController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Expenses\ExpenseController;
 use App\Http\Controllers\GlobalSearchController;
+use App\Http\Controllers\Inventory\CategoryController;
 use App\Http\Controllers\Inventory\ProductController;
 use App\Http\Controllers\Inventory\StockController;
 use App\Http\Controllers\Locations\LocationsController;
@@ -88,6 +89,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
         Route::get('stock', [StockController::class, 'index'])->name('stock.index');
         Route::post('stock/adjust', [StockController::class, 'adjust'])->name('stock.adjust');
+
+        Route::get('categories', [CategoryController::class, 'index'])->name('categories.index');
+        Route::post('categories', [CategoryController::class, 'store'])->name('categories.store');
+        Route::patch('categories/{category}', [CategoryController::class, 'update'])->name('categories.update');
+        Route::delete('categories/{category}', [CategoryController::class, 'destroy'])->name('categories.destroy');
     });
 
     // ── Accounts (blocked for salesman role) ─────────────────
