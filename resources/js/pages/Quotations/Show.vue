@@ -3,7 +3,7 @@ import AppLayout from '@/layouts/AppLayout.vue';
 import { useConfirm } from '@/composables/useConfirm';
 import { formatMoney } from '@/utils/format';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { CheckCircle, ChevronDown, Edit, FileText, Layers, Printer, ShoppingCart, Trash2 } from 'lucide-vue-next';
+import { CheckCircle, ChevronDown, Edit, FileText, Printer, ShoppingCart, Trash2 } from 'lucide-vue-next';
 import { ref } from 'vue';
 
 interface QuotationItem {
@@ -268,12 +268,6 @@ ${q.notes ? `
                         :href="route('quotations.edit', quotation.id)"
                         class="inline-flex items-center gap-1.5 rounded-lg border border-input px-3 py-2 text-sm hover:bg-muted transition-colors">
                         <Edit class="h-3.5 w-3.5" /> Edit
-                    </Link>
-
-                    <!-- Create Challan -->
-                    <Link :href="route('challans.create') + '?quotation_id=' + quotation.id"
-                        class="inline-flex items-center gap-1.5 rounded-lg border border-input px-3 py-2 text-sm hover:bg-muted transition-colors">
-                        <Layers class="h-3.5 w-3.5" /> Delivery Challan
                     </Link>
 
                     <!-- Convert to Sale -->

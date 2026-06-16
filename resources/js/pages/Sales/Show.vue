@@ -10,7 +10,7 @@ import { useReceipt } from '@/composables/useReceipt';
 import { formatMoney, formatDateTime } from '@/utils/format';
 import { paymentBadge, statusBadge } from '@/constants/badges';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
-import { AlertTriangle, ArrowLeft, ArrowUpLeft, Eye, Printer, RotateCcw } from 'lucide-vue-next';
+import { AlertTriangle, ArrowLeft, ArrowUpLeft, Eye, Layers, Printer, RotateCcw } from 'lucide-vue-next';
 import { computed, reactive, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 
@@ -197,6 +197,13 @@ async function printReceipt() {
                 </div>
 
                 <div class="flex items-center gap-2">
+                    <Link
+                        :href="route('challans.create') + '?sale_id=' + sale.id"
+                        class="flex items-center gap-2 rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-muted transition-colors"
+                    >
+                        <Layers class="h-4 w-4" />
+                        Delivery Challan
+                    </Link>
                     <button
                         @click="printReceipt"
                         :disabled="printing"

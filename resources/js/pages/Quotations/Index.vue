@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { formatMoney } from '@/utils/format';
+import { useConfirm } from '@/composables/useConfirm';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { CheckCircle, Clock, FileText, Plus, Search, XCircle } from 'lucide-vue-next';
+import { CheckCircle, Clock, Edit, FileText, Printer, Plus, Search, XCircle } from 'lucide-vue-next';
 import { ref } from 'vue';
 
 interface Quotation {
@@ -26,9 +27,22 @@ const props = defineProps<{
 
 const search = ref(props.filters.search ?? '');
 const statusFilter = ref(props.filters.status ?? '');
+const { confirm } = useConfirm();
 
 function applyFilters() {
     router.get(route('quotations.index'), { search: search.value, status: statusFilter.value }, { preserveState: true, replace: true });
+}
+
+async function cancelQuotation(e: Event, q: Quotation) {
+    e.stopPropagation();
+    if (await confirm({ title: 'Cancel Quotation', message: `Cancel ${q.quotation_number}? This cannot be undone.`, confirmText: 'Cancel Quotation', variant: 'destructive' })) {
+        router.patch(route('quotations.update-status', q.id), { status: 'cancelled' }, { preserveScroll: true });
+    }
+}
+
+function openPrint(e: Event, q: Quotation) {
+    e.stopPropagation();
+    window.open(route('quotations.show', q.id), '_blank');
 }
 
 const statusBadge: Record<string, string> = {
@@ -139,11 +153,12 @@ const statusBadge: Record<string, string> = {
                             <th class="px-4 py-3 text-end font-medium text-muted-foreground hidden sm:table-cell">Balance Due</th>
                             <th class="px-4 py-3 text-start font-medium text-muted-foreground hidden lg:table-cell">Valid Until</th>
                             <th class="px-4 py-3 text-start font-medium text-muted-foreground hidden lg:table-cell">Date</th>
+                            <th class="px-4 py-3 text-end font-medium text-muted-foreground">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-border">
                         <tr v-if="quotations.data.length === 0">
-                            <td colspan="8" class="px-4 py-12 text-center text-muted-foreground">No quotations found.</td>
+                            <td colspan="9" class="px-4 py-12 text-center text-muted-foreground">No quotations found.</td>
                         </tr>
                         <tr v-for="q in quotations.data" :key="q.id" class="hover:bg-muted/30 cursor-pointer transition-colors"
                             @click="router.visit(route('quotations.show', q.id))">
@@ -161,6 +176,31 @@ const statusBadge: Record<string, string> = {
                             </td>
                             <td class="px-4 py-3 text-muted-foreground hidden lg:table-cell">{{ q.valid_until ?? '—' }}</td>
                             <td class="px-4 py-3 text-muted-foreground hidden lg:table-cell">{{ q.created_at }}</td>
+                            <td class="px-4 py-3" @click.stop>
+                                <div class="flex items-center justify-end gap-1">
+                                    <!-- Print -->
+                                    <button @click="openPrint($event, q)"
+                                        title="Print"
+                                        class="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+                                        <Printer class="h-3.5 w-3.5" />
+                                    </button>
+                                    <!-- Edit (not for converted/cancelled) -->
+                                    <Link v-if="!['converted', 'cancelled'].includes(q.status)"
+                                        :href="route('quotations.edit', q.id)"
+                                        title="Edit"
+                                        class="rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+                                        @click.stop>
+                                        <Edit class="h-3.5 w-3.5" />
+                                    </Link>
+                                    <!-- Cancel (not for converted/cancelled) -->
+                                    <button v-if="!['converted', 'cancelled'].includes(q.status)"
+                                        @click="cancelQuotation($event, q)"
+                                        title="Cancel"
+                                        class="rounded-md p-1.5 text-muted-foreground hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 transition-colors">
+                                        <XCircle class="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
+                            </td>
                         </tr>
                     </tbody>
                 </table>
