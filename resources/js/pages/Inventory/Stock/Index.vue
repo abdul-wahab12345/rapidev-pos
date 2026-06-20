@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
+import { formatUnit } from '@/utils/format';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import {
     AlertTriangle,
@@ -35,13 +36,19 @@ const breadcrumbs = computed<BreadcrumbItem[]>(() => [
 
 interface Category { name: string; color: string }
 interface Variant   { id: string; label: string }
-interface Product   { id: string; name: string; sku: string | null; unit: string; category: Category | null }
+interface Product   {
+    id: string; name: string; sku: string | null; unit: string; category: Category | null;
+    tiles_per_box: number | null; sq_m_per_box: number | null; material_type: string | null;
+}
 
 interface StockRow {
     id: string;
     product_id: string;
     variant_id: string | null;
     quantity: number;
+    boxes_count: number | null;
+    loose_tiles_count: number | null;
+    box_count_at: string | null;
     reorder_level: number;
     product: Product;
     variant: Variant | null;
@@ -117,27 +124,55 @@ const showAdjust = ref(false);
 const adjustRow  = ref<StockRow | null>(null);
 
 const form = useForm({
-    product_id: '',
-    variant_id: null as string | null,
-    type:       'add' as 'add' | 'remove' | 'set',
-    quantity:   1,
-    reason:     'purchase' as string,
-    notes:      '',
+    product_id:        '',
+    variant_id:        null as string | null,
+    type:              'add' as 'add' | 'remove' | 'set',
+    quantity:          1,
+    reason:            'purchase' as string,
+    notes:             '',
+    boxes_count:       null as number | null,
+    loose_tiles_count: null as number | null,
+});
+
+const isTileProduct = computed(() => {
+    if (!adjustRow.value) return false;
+    const p = adjustRow.value.product;
+    return !!(p.tiles_per_box && p.tiles_per_box > 0 &&
+              ['tile', 'ceramic', 'mosaic', 'border'].includes(p.material_type ?? ''));
+});
+
+// For tile products: convert boxes + loose tiles → m²
+const tileComputedQty = computed(() => {
+    if (!isTileProduct.value || !adjustRow.value) return null;
+    const tpb     = adjustRow.value.product.tiles_per_box ?? 1;
+    const sqmBox  = adjustRow.value.product.sq_m_per_box ?? 0;
+    if (!sqmBox) return null;   // can't convert without sq_m_per_box
+    const sqmTile = sqmBox / tpb;
+    const boxes   = Number(form.boxes_count ?? 0);
+    const loose   = Number(form.loose_tiles_count ?? 0);
+    const totalTiles = boxes * tpb + loose;
+    return Math.round(totalTiles * sqmTile * 100) / 100;
 });
 
 function openAdjust(row: StockRow) {
     adjustRow.value = row;
     form.reset();
-    form.product_id = row.product_id;
-    form.variant_id = row.variant_id;
-    form.type       = 'add';
-    form.quantity   = 1;
-    form.reason     = 'purchase';
-    form.notes      = '';
+    form.product_id        = row.product_id;
+    form.variant_id        = row.variant_id;
+    form.type              = 'add';
+    form.quantity          = 1;
+    form.reason            = 'purchase';
+    form.notes             = '';
+    form.boxes_count       = null;
+    form.loose_tiles_count = null;
     showAdjust.value = true;
 }
 
 function submitAdjust() {
+    if (isTileProduct.value) {
+        if (tileComputedQty.value === null) return; // missing sq_m_per_box — blocked by UI warning
+        form.quantity = tileComputedQty.value;
+    }
     form.post(route('inventory.stock.adjust'), {
         preserveScroll: true,
         onSuccess: () => {
@@ -147,13 +182,32 @@ function submitAdjust() {
     });
 }
 
-const previewQty = computed(() => {
-    if (!adjustRow.value) return null;
-    const cur = adjustRow.value.quantity;
-    if (form.type === 'add')    return cur + form.quantity;
-    if (form.type === 'remove') return Math.max(0, cur - form.quantity);
+const effectiveQty = computed(() => {
+    if (isTileProduct.value && tileComputedQty.value !== null) return tileComputedQty.value;
     return form.quantity;
 });
+
+const previewQty = computed(() => {
+    if (!adjustRow.value) return null;
+    const qty = effectiveQty.value;
+    const cur = Number(adjustRow.value.quantity);
+    if (form.type === 'add')    return Math.round((cur + qty) * 100) / 100;
+    if (form.type === 'remove') return Math.round(Math.max(0, cur - qty) * 100) / 100;
+    return qty;
+});
+
+// ── Box / tile display helper ────────────────────────────
+// Computes approximate boxes + loose tiles from current m² quantity in real-time.
+// The stored boxes_count/loose_tiles_count are stale snapshots; this is authoritative.
+function liveBoxCount(row: StockRow): { boxes: number; loose: number } | null {
+    const p = row.product;
+    if (!p.tiles_per_box || !p.sq_m_per_box) return null;
+    if (!['tile', 'ceramic', 'mosaic', 'border'].includes(p.material_type ?? '')) return null;
+    const sqmPerTile = p.sq_m_per_box / p.tiles_per_box;
+    if (!sqmPerTile) return null;
+    const totalTiles = Math.round(Number(row.quantity) / sqmPerTile);
+    return { boxes: Math.floor(totalTiles / p.tiles_per_box), loose: totalTiles % p.tiles_per_box };
+}
 
 // ── Formatting ──────────────────────────────────────────
 function fmtDate(d: string) {
@@ -310,7 +364,14 @@ const qtyAdjustPlaceholder = computed(() => {
                                     <span v-else class="text-muted-foreground">—</span>
                                 </td>
                                 <td class="px-4 py-3 text-muted-foreground font-mono text-xs">{{ row.product.sku ?? '—' }}</td>
-                                <td class="px-4 py-3 text-center font-bold tabular-nums text-foreground">{{ row.quantity }}</td>
+                                <td class="px-4 py-3 text-center font-bold tabular-nums text-foreground">
+                                    {{ row.quantity }}
+                                    <span v-if="row.product.unit" class="text-xs font-normal text-muted-foreground"> {{ formatUnit(row.product.unit) }}</span>
+                                    <div v-if="liveBoxCount(row)" class="text-xs font-normal text-muted-foreground mt-0.5">
+                                        ≈{{ liveBoxCount(row)!.boxes }} box
+                                        <template v-if="liveBoxCount(row)!.loose > 0"> + {{ liveBoxCount(row)!.loose }} tile</template>
+                                    </div>
+                                </td>
                                 <td class="px-4 py-3 text-center text-muted-foreground">{{ row.reorder_level }}</td>
                                 <td class="px-4 py-3 text-center">
                                     <StockBadge :quantity="row.quantity" :reorder-level="row.reorder_level" />
@@ -425,7 +486,7 @@ const qtyAdjustPlaceholder = computed(() => {
                     <p v-if="adjustRow.variant" class="text-xs text-muted-foreground">{{ adjustRow.variant.label }}</p>
                     <p class="mt-1 text-sm text-muted-foreground">
                         {{ t('inventory.currentStock') }}: <strong class="text-foreground">{{ adjustRow.quantity }}</strong>
-                        {{ adjustRow.product.unit }}
+                        <span v-if="adjustRow.product.unit"> {{ formatUnit(adjustRow.product.unit) }}</span>
                     </p>
                 </div>
 
@@ -447,8 +508,34 @@ const qtyAdjustPlaceholder = computed(() => {
                     </button>
                 </div>
 
-                <!-- Quantity -->
-                <div class="space-y-1.5">
+                <!-- Tile product: quantity derived from boxes + loose tiles → m² -->
+                <div v-if="isTileProduct" class="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
+                    <p class="text-xs font-medium text-foreground">Enter boxes &amp; loose tiles</p>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="space-y-1">
+                            <Label class="text-xs">Boxes</Label>
+                            <Input v-model.number="form.boxes_count" type="number" min="0" placeholder="0" />
+                        </div>
+                        <div class="space-y-1">
+                            <Label class="text-xs">Loose Tiles</Label>
+                            <Input v-model.number="form.loose_tiles_count" type="number" min="0" placeholder="0" />
+                        </div>
+                    </div>
+                    <div v-if="tileComputedQty !== null" class="text-xs text-muted-foreground">
+                        {{ adjustRow?.product.tiles_per_box }} tiles/box · {{ adjustRow?.product.sq_m_per_box }} m²/box →
+                        <strong class="text-foreground">{{ tileComputedQty }} m²</strong>
+                    </div>
+                    <div v-else class="text-xs text-amber-600 dark:text-amber-400">
+                        Set sq_m_per_box on the product to enable automatic m² calculation.
+                    </div>
+                    <p v-if="previewQty !== null && tileComputedQty !== null" class="text-xs text-muted-foreground">
+                        {{ t('inventory.stockAfterAdjustment') }}: <strong class="text-foreground">{{ previewQty }} {{ formatUnit(adjustRow?.product.unit) }}</strong>
+                    </p>
+                    <p v-if="form.errors.quantity" class="text-xs text-destructive">{{ form.errors.quantity }}</p>
+                </div>
+
+                <!-- Non-tile: manual quantity -->
+                <div v-else class="space-y-1.5">
                     <Label>{{ t('common.quantity') }}</Label>
                     <Input
                         v-model.number="form.quantity"

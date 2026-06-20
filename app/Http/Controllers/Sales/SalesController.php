@@ -115,7 +115,7 @@ class SalesController extends Controller
     public function show(Sale $sale): Response
     {
         $sale->load([
-            'items',
+            'items.product:id,tiles_per_box,sq_m_per_box,material_type',
             'customer:id,name,phone,address',
             'cashier:id,name',
             'branch:id,name',
@@ -165,6 +165,9 @@ class SalesController extends Controller
                     'discount'           => (float) $i->discount,
                     'line_total'         => (float) $i->line_total,
                     'quantity_returnable' => $i->quantity - ($returnedQty[$i->id] ?? 0),
+                    'tiles_per_box'      => $i->product?->tiles_per_box,
+                    'sq_m_per_box'       => $i->product ? (float) ($i->product->sq_m_per_box ?? 0) : null,
+                    'material_type'      => $i->product?->material_type,
                 ]),
                 'returns' => $existingReturns->map(fn ($r) => [
                     'id'            => $r->id,
@@ -182,7 +185,7 @@ class SalesController extends Controller
     // AJAX: return full receipt data for inline printing from the list page
     public function receiptData(Sale $sale): JsonResponse
     {
-        $sale->load(['items.product:id,name_ur', 'customer:id,name,phone', 'cashier:id,name', 'branch:id,name']);
+        $sale->load(['items.product:id,name_ur,unit,tiles_per_box,sq_m_per_box,material_type', 'customer:id,name,phone', 'cashier:id,name', 'branch:id,name']);
 
         $tenant   = auth()->user()->tenant;
         $settings = $tenant?->settings ?? [];
@@ -210,6 +213,10 @@ class SalesController extends Controller
                 'name_ur'       => optional($i->product)->name_ur,
                 'variant_label' => $i->variant_label,
                 'quantity'      => $i->quantity,
+                'unit'          => optional($i->product)->unit,
+                'tiles_per_box' => optional($i->product)->tiles_per_box,
+                'sq_m_per_box'  => optional($i->product)->sq_m_per_box ? (float) $i->product->sq_m_per_box : null,
+                'material_type' => optional($i->product)->material_type,
                 'unit_price'    => (float) $i->unit_price,
                 'discount'      => (float) $i->discount,
                 'line_total'    => (float) $i->line_total,

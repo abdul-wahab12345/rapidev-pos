@@ -1,4 +1,4 @@
-import { formatDateTime, formatMoney } from '@/utils/format';
+import { formatDateTime, formatMoney, formatUnit } from '@/utils/format';
 import { useI18n } from 'vue-i18n';
 
 export interface ReceiptItem {
@@ -6,9 +6,27 @@ export interface ReceiptItem {
     name_ur?: string | null;
     variant_label?: string | null;
     quantity: number;
+    unit?: string | null;
     unit_price: number;
     line_total: number;
     discount: number;
+    tiles_per_box?: number | null;
+    sq_m_per_box?: number | null;
+    material_type?: string | null;
+}
+
+const TILE_TYPES = ['tile', 'ceramic', 'mosaic', 'border'];
+
+function tileBreakdown(item: ReceiptItem): string | null {
+    if (!item.tiles_per_box || !item.sq_m_per_box) return null;
+    if (!TILE_TYPES.includes(item.material_type ?? '')) return null;
+    const sqmPerTile = item.sq_m_per_box / item.tiles_per_box;
+    if (!sqmPerTile) return null;
+    const totalTiles = Math.round(item.quantity / sqmPerTile);
+    const boxes = Math.floor(totalTiles / item.tiles_per_box);
+    const loose = totalTiles % item.tiles_per_box;
+    if (boxes === 0 && loose === 0) return null;
+    return loose > 0 ? `~${boxes} box + ${loose} tile` : `~${boxes} box`;
 }
 
 export interface ReceiptData {
@@ -79,9 +97,11 @@ function buildThermalHtml(data: ReceiptData, t: TFn): string {
     const itemRows = data.items.map(item => {
         const name = itemName(item, isUr);
         const vl   = item.variant_label ? ` <span style="font-size:10px">(${item.variant_label})</span>` : '';
+        const qtyStr = item.unit ? `${item.quantity} ${formatUnit(item.unit)}` : String(item.quantity);
+        const bdStr  = tileBreakdown(item);
         return `<tr>
-            <td>${name}${vl}</td>
-            <td class="c">${item.quantity}</td>
+            <td>${name}${vl}${bdStr ? `<br><span style="font-size:10px;color:#666">${bdStr}</span>` : ''}</td>
+            <td class="c">${qtyStr}</td>
             <td class="r">${fm(item.unit_price)}</td>
             <td class="r">${fm(item.line_total)}</td>
         </tr>${item.discount > 0 ? `<tr class="dr"><td colspan="3">&nbsp;${t('receipt.disc')}</td><td class="r">−${fm(item.discount)}</td></tr>` : ''}`;
@@ -159,10 +179,12 @@ function buildA4Html(data: ReceiptData, t: TFn): string {
     const itemRows = data.items.map((item, i) => {
         const name = itemName(item, isUr);
         const vl   = item.variant_label ? `<br><span style="font-size:11px;color:#666">${item.variant_label}</span>` : '';
+        const qtyStr = item.unit ? `${item.quantity} ${formatUnit(item.unit)}` : String(item.quantity);
+        const bdStr  = tileBreakdown(item);
         return `<tr>
             <td class="num">${i + 1}</td>
-            <td>${name}${vl}</td>
-            <td class="r">${item.quantity}</td>
+            <td>${name}${vl}${bdStr ? `<br><span style="font-size:11px;color:#666">${bdStr}</span>` : ''}</td>
+            <td class="r">${qtyStr}</td>
             <td class="r">${fm(item.unit_price)}</td>
             <td class="r">${item.discount > 0 ? `−${fm(item.discount)}` : '—'}</td>
             <td class="r fw">${fm(item.line_total)}</td>

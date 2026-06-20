@@ -5,7 +5,7 @@ import { Head } from '@inertiajs/vue3';
 import { useConfirm } from '@/composables/useConfirm';
 import { useReceipt } from '@/composables/useReceipt';
 import { useSound } from '@/composables/useSound';
-import { formatMoney, isUrdu } from '@/utils/format';
+import { formatMoney, formatUnit, isUrdu } from '@/utils/format';
 import posService from '@/services/posService';
 import axios from 'axios';
 import {
@@ -295,8 +295,59 @@ watch([discountInput, discountType], () => {
 });
 
 watch(() => cart.items.length, (len) => {
-    if (len === 0) { discountInput.value = 0; cart.cartDiscount = 0; showDiscountRow.value = false; }
+    if (len === 0) {
+        discountInput.value = 0;
+        cart.cartDiscount = 0;
+        showDiscountRow.value = false;
+        tileEntryMode.value = {};
+        tileInputCount.value = {};
+    }
 });
+
+// ── Tile entry mode per cart item ───────────────────────────────
+const TILE_MATERIAL_TYPES = ['tile', 'ceramic', 'mosaic', 'border'];
+
+function isTileCartItem(item: typeof cart.items[0]): boolean {
+    return TILE_MATERIAL_TYPES.includes(item.material_type ?? '') &&
+        !!item.tiles_per_box && !!item.sq_m_per_box;
+}
+
+const tileEntryMode = ref<Record<number, 'sqm' | 'tiles'>>({});
+const tileInputCount = ref<Record<number, number | ''>>({});
+
+function getTileMode(idx: number): 'sqm' | 'tiles' {
+    return tileEntryMode.value[idx] ?? 'sqm';
+}
+
+function setTileMode(idx: number, mode: 'sqm' | 'tiles') {
+    tileEntryMode.value[idx] = mode;
+    if (mode === 'tiles') {
+        const item = cart.items[idx];
+        if (!item || !item.sq_m_per_box || !item.tiles_per_box) return;
+        const sqmPerTile = item.sq_m_per_box / item.tiles_per_box;
+        tileInputCount.value[idx] = sqmPerTile > 0
+            ? Math.round(item.quantity / sqmPerTile)
+            : 1;
+    }
+}
+
+function applyTileCount(idx: number) {
+    const item = cart.items[idx];
+    if (!item || !item.sq_m_per_box || !item.tiles_per_box) return;
+    const tiles = Number(tileInputCount.value[idx] || 0);
+    if (tiles <= 0) return;
+    const sqmPerTile = item.sq_m_per_box / item.tiles_per_box;
+    const sqm = Math.round(tiles * sqmPerTile * 100) / 100;
+    cart.updateQuantity(idx, sqm);
+}
+
+function liveTileSqm(idx: number): number {
+    const item = cart.items[idx];
+    if (!item || !item.sq_m_per_box || !item.tiles_per_box) return 0;
+    const tiles = Number(tileInputCount.value[idx] || 0);
+    const sqmPerTile = item.sq_m_per_box / item.tiles_per_box;
+    return Math.round(tiles * sqmPerTile * 100) / 100;
+}
 
 // ── Item-level discount ─────────────────────────────────────────
 const expandedItemIdx = ref<number | null>(null);
@@ -388,9 +439,13 @@ function printReceipt() {
             name_ur:       item.name_ur,
             variant_label: item.variant_label,
             quantity:      item.quantity,
+            unit:          item.unit,
             unit_price:    item.unit_price,
-            line_total: (item.unit_price * item.quantity) - cart.lineDiscountTotal(item),
-            discount: cart.lineDiscountTotal(item),
+            line_total:    (item.unit_price * item.quantity) - cart.lineDiscountTotal(item),
+            discount:      cart.lineDiscountTotal(item),
+            tiles_per_box: item.tiles_per_box,
+            sq_m_per_box:  item.sq_m_per_box,
+            material_type: item.material_type,
         })),
         subtotal:         cart.subtotal,
         discount:         cart.cartDiscount,
@@ -520,7 +575,9 @@ onUnmounted(() => window.removeEventListener('keydown', handleKey));
                                 </span>
                                 <span v-if="!product.has_variants && cart.getRatePrice(product.id, null) !== null" class="text-[10px] text-muted-foreground line-through">{{ fmt(product.selling_price) }}</span>
                             </div>
-                            <span v-if="!product.has_variants" class="text-[11px] text-muted-foreground">{{ product.stock > 0 ? `×${product.stock}` : '' }}</span>
+                            <span v-if="!product.has_variants" class="text-[11px] text-muted-foreground">
+                                {{ formatUnit(product.unit) }}{{ product.stock > 0 ? ` ×${product.stock}` : '' }}
+                            </span>
                         </div>
                     </button>
                 </div>
@@ -822,7 +879,7 @@ onUnmounted(() => window.removeEventListener('keydown', handleKey));
                                 <p v-if="item.name_ur" class="truncate text-[12px] text-muted-foreground leading-tight" dir="rtl">{{ item.name_ur }}</p>
                                 <p v-if="item.variant_label" class="text-xs text-muted-foreground">{{ item.variant_label }}</p>
                                 <div class="mt-0.5 flex items-center gap-2">
-                                    <span class="text-xs text-muted-foreground">{{ fmt(item.unit_price) }}</span>
+                                    <span class="text-xs text-muted-foreground">{{ fmt(item.unit_price) }}{{ item.unit ? ' / ' + formatUnit(item.unit) : '' }}</span>
                                     <span v-if="item.discount_per_unit > 0" class="flex items-center gap-0.5 text-[11px] text-green-600 dark:text-green-400">
                                         <Tag class="h-2.5 w-2.5" /> −{{ fmt(cart.lineDiscountTotal(item)) }}
                                     </span>
@@ -830,30 +887,72 @@ onUnmounted(() => window.removeEventListener('keydown', handleKey));
                             </div>
 
                             <!-- Qty controls -->
-                            <div class="flex items-center gap-1">
-                                <button
-                                    @click="cart.updateQuantity(idx, item.quantity - 1)"
-                                    class="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-background text-foreground hover:bg-accent transition-colors"
-                                >
-                                    <Minus class="h-3.5 w-3.5" />
-                                </button>
-                                <!-- Editable quantity input -->
-                                <input
-                                    :value="item.quantity"
-                                    @change="cart.updateQuantity(idx, Math.max(1, parseInt(($event.target as HTMLInputElement).value) || 1))"
-                                    @focus="($event.target as HTMLInputElement).select()"
-                                    type="number"
-                                    min="1"
-                                    :max="item.stock"
-                                    class="w-10 rounded border border-border bg-background text-center text-[13px] font-bold text-foreground focus:outline-none focus:ring-1 focus:ring-ring py-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                                />
-                                <button
-                                    @click="cart.updateQuantity(idx, item.quantity + 1)"
-                                    :disabled="item.quantity >= item.stock"
-                                    class="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-background text-foreground hover:bg-accent transition-colors disabled:opacity-30"
-                                >
-                                    <Plus class="h-3.5 w-3.5" />
-                                </button>
+                            <div class="flex flex-col items-center gap-1">
+                                <!-- Mode toggle for tile products -->
+                                <div v-if="isTileCartItem(item)" class="flex rounded border border-border text-[10px] overflow-hidden">
+                                    <button type="button"
+                                        :class="getTileMode(idx) === 'sqm' ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:bg-muted'"
+                                        class="px-1.5 py-0.5 transition-colors"
+                                        @click="setTileMode(idx, 'sqm')">m²</button>
+                                    <button type="button"
+                                        :class="getTileMode(idx) === 'tiles' ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:bg-muted'"
+                                        class="px-1.5 py-0.5 transition-colors"
+                                        @click="setTileMode(idx, 'tiles')">tiles</button>
+                                </div>
+
+                                <!-- Tiles entry mode -->
+                                <template v-if="isTileCartItem(item) && getTileMode(idx) === 'tiles'">
+                                    <div class="flex items-center gap-1">
+                                        <button type="button"
+                                            @click="tileInputCount[idx] = Math.max(1, Number(tileInputCount[idx] || 1) - 1); applyTileCount(idx)"
+                                            class="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-background hover:bg-accent transition-colors">
+                                            <Minus class="h-3.5 w-3.5" />
+                                        </button>
+                                        <input
+                                            :value="tileInputCount[idx]"
+                                            @input="tileInputCount[idx] = Number(($event.target as HTMLInputElement).value) || 0"
+                                            @change="applyTileCount(idx)"
+                                            @focus="($event.target as HTMLInputElement).select()"
+                                            type="number" min="1"
+                                            class="w-10 rounded border border-border bg-background text-center text-[13px] font-bold focus:outline-none focus:ring-1 focus:ring-ring py-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                        />
+                                        <button type="button"
+                                            @click="tileInputCount[idx] = Number(tileInputCount[idx] || 0) + 1; applyTileCount(idx)"
+                                            class="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-background hover:bg-accent transition-colors">
+                                            <Plus class="h-3.5 w-3.5" />
+                                        </button>
+                                    </div>
+                                    <span v-if="liveTileSqm(idx) > 0" class="text-[10px] text-primary font-medium">= {{ liveTileSqm(idx) }} m²</span>
+                                </template>
+
+                                <!-- Default m² entry -->
+                                <template v-else>
+                                    <div class="flex items-center gap-1">
+                                        <button
+                                            @click="cart.updateQuantity(idx, Math.max(0.01, +(item.quantity - (isTileCartItem(item) ? (item.sq_m_per_box! / item.tiles_per_box!) : 1)).toFixed(2)))"
+                                            class="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-background text-foreground hover:bg-accent transition-colors"
+                                        >
+                                            <Minus class="h-3.5 w-3.5" />
+                                        </button>
+                                        <input
+                                            :value="item.quantity"
+                                            @change="cart.updateQuantity(idx, Math.max(0.01, parseFloat(($event.target as HTMLInputElement).value) || 0.01))"
+                                            @focus="($event.target as HTMLInputElement).select()"
+                                            type="number"
+                                            min="0.01"
+                                            step="0.01"
+                                            :max="item.stock"
+                                            class="w-10 rounded border border-border bg-background text-center text-[13px] font-bold text-foreground focus:outline-none focus:ring-1 focus:ring-ring py-0.5 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                                        />
+                                        <button
+                                            @click="cart.updateQuantity(idx, +(item.quantity + (isTileCartItem(item) ? (item.sq_m_per_box! / item.tiles_per_box!) : 1)).toFixed(2))"
+                                            :disabled="item.quantity >= item.stock"
+                                            class="flex h-7 w-7 items-center justify-center rounded-lg border border-border bg-background text-foreground hover:bg-accent transition-colors disabled:opacity-30"
+                                        >
+                                            <Plus class="h-3.5 w-3.5" />
+                                        </button>
+                                    </div>
+                                </template>
                             </div>
 
                             <!-- Line total + disc toggle -->

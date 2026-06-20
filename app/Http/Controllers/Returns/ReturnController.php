@@ -84,7 +84,7 @@ class ReturnController extends Controller
             'notes'                => 'nullable|string|max:1000',
             'items'                => 'required|array|min:1',
             'items.*.sale_item_id' => 'required|uuid|exists:sale_items,id',
-            'items.*.quantity_returned' => 'required|integer|min:1',
+            'items.*.quantity_returned' => 'required|numeric|min:0.01',
             'items.*.restock'      => 'boolean',
         ]);
 

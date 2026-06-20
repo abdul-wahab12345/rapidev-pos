@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { useConfirm } from '@/composables/useConfirm';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
-import { formatMoney } from '@/utils/format';
+import { formatMoney, formatUnit } from '@/utils/format';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import {
     ArrowLeft, Ban, Building2, Calendar, CreditCard,
@@ -23,6 +23,10 @@ interface OrderItem {
     quantity_received: number;
     unit_cost: number;
     line_total: number;
+    unit: string | null;
+    tiles_per_box: number | null;
+    sq_m_per_box: number | null;
+    material_type: string | null;
 }
 
 interface Payment {
@@ -106,7 +110,20 @@ function paymentMethodPo(m: string) {
 
 // ── Receive ────────────────────────────────────────────────────
 const showReceive = ref(false);
-const receiveForm = useForm({ items: props.order.items.map(i => ({ id: i.id, quantity_received: i.quantity_ordered })) });
+const receiveForm = useForm({
+    items: props.order.items.map(i => ({
+        id: i.id,
+        quantity_received: i.quantity_ordered,
+        boxes_count: null as number | null,
+        loose_tiles_count: null as number | null,
+    })),
+});
+
+function isTileItem(i: number): boolean {
+    const item = props.order.items[i];
+    return !!(item?.tiles_per_box && item.tiles_per_box > 0 &&
+              ['tile', 'ceramic', 'mosaic', 'border'].includes(item.material_type ?? ''));
+}
 function submitReceive() {
     receiveForm.post(route('purchasing.orders.receive', props.order.id), {
         onSuccess: () => { showReceive.value = false; },
@@ -346,13 +363,18 @@ const subtitleLine = computed(() => {
                             <div class="flex-1">
                                 <div class="font-medium">{{ item.product_name }}</div>
                                 <div v-if="item.variant_label" class="text-muted-foreground text-xs">{{ item.variant_label }}</div>
+                                <div v-if="item.unit" class="text-muted-foreground text-xs">{{ formatUnit(item.unit) }}</div>
                             </div>
-                            <div class="w-20 text-center">{{ item.quantity_ordered }}</div>
+                            <div class="w-20 text-center">
+                                {{ item.quantity_ordered }}
+                                <span v-if="item.unit" class="text-xs text-muted-foreground"> {{ formatUnit(item.unit) }}</span>
+                            </div>
                             <div class="w-20 text-center">
                                 <span :class="item.quantity_received >= item.quantity_ordered
                                     ? 'text-emerald-600'
                                     : item.quantity_received > 0 ? 'text-amber-600' : 'text-muted-foreground'">
                                     {{ item.quantity_received }}
+                                    <span v-if="item.unit" class="text-xs"> {{ item.unit }}</span>
                                 </span>
                             </div>
                             <div class="w-24 text-end">{{ fmt(item.unit_cost) }}</div>
@@ -439,16 +461,35 @@ const subtitleLine = computed(() => {
             <p class="text-muted-foreground text-sm">{{ t('purchasing.receiveModalIntro') }}</p>
             <form @submit.prevent="submitReceive" class="mt-2 flex flex-col gap-3">
                 <div v-for="(line, i) in receiveForm.items" :key="line.id"
-                    class="flex items-center gap-4 border rounded-lg px-3 py-2 text-sm rtl:flex-row-reverse">
-                    <div class="flex-1">
-                        <div class="font-medium">{{ order.items[i]?.product_name }}</div>
-                        <div v-if="order.items[i]?.variant_label" class="text-muted-foreground text-xs">{{ order.items[i]?.variant_label }}</div>
-                        <div class="text-muted-foreground text-xs">{{ t('purchasing.receiveOrderedLabel', { qty: order.items[i]?.quantity_ordered }) }}</div>
+                    class="border rounded-lg px-3 py-2.5 text-sm space-y-2">
+                    <div class="flex items-center gap-4">
+                        <div class="flex-1">
+                            <div class="font-medium">{{ order.items[i]?.product_name }}</div>
+                            <div v-if="order.items[i]?.variant_label" class="text-muted-foreground text-xs">{{ order.items[i]?.variant_label }}</div>
+                            <div class="text-muted-foreground text-xs">
+                            {{ t('purchasing.receiveOrderedLabel', { qty: order.items[i]?.quantity_ordered }) }}
+                            <span v-if="order.items[i]?.unit"> {{ formatUnit(order.items[i]!.unit!) }}</span>
+                        </div>
+                        </div>
+                        <div class="w-24">
+                            <Label class="text-xs">{{ t('purchasing.receivedQty') }}</Label>
+                            <Input v-model.number="line.quantity_received" type="number"
+                                :max="order.items[i]?.quantity_ordered" min="0" class="mt-0.5 text-center" />
+                        </div>
                     </div>
-                    <div class="w-24">
-                        <Label class="text-xs">{{ t('purchasing.receivedQty') }}</Label>
-                        <Input v-model.number="line.quantity_received" type="number"
-                            :max="order.items[i]?.quantity_ordered" min="0" class="mt-0.5 text-center" />
+                    <!-- Box/tile breakdown for tile products -->
+                    <div v-if="isTileItem(i)" class="grid grid-cols-2 gap-2 rounded bg-muted/40 px-2 py-2">
+                        <div>
+                            <Label class="text-xs">Boxes received</Label>
+                            <Input v-model.number="line.boxes_count" type="number" min="0" placeholder="0" class="mt-0.5 text-center" />
+                        </div>
+                        <div>
+                            <Label class="text-xs">Loose tiles</Label>
+                            <Input v-model.number="line.loose_tiles_count" type="number" min="0" placeholder="0" class="mt-0.5 text-center" />
+                        </div>
+                        <p v-if="order.items[i]?.tiles_per_box" class="col-span-2 text-xs text-muted-foreground">
+                            {{ order.items[i]?.tiles_per_box }} tiles/box · enter physical count for stock report
+                        </p>
                     </div>
                 </div>
                 <DialogFooter class="pt-2">

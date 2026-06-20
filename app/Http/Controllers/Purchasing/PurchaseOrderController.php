@@ -93,7 +93,7 @@ class PurchaseOrderController extends Controller
             ->where('is_active', true)
             ->with('variants:id,product_id,size,color,cost_price')
             ->orderBy('name')
-            ->get(['id', 'name', 'name_ur', 'sku', 'unit', 'cost_price', 'has_variants'])
+            ->get(['id', 'name', 'name_ur', 'sku', 'unit', 'cost_price', 'has_variants', 'tiles_per_box', 'sq_m_per_box', 'material_type'])
             ->map(fn ($p) => [
                 'id' => $p->id,
                 'name' => $p->name,
@@ -102,6 +102,9 @@ class PurchaseOrderController extends Controller
                 'unit' => $p->unit,
                 'cost_price' => (float) $p->cost_price,
                 'has_variants' => $p->has_variants,
+                'tiles_per_box' => $p->tiles_per_box,
+                'sq_m_per_box'  => $p->sq_m_per_box ? (float) $p->sq_m_per_box : null,
+                'material_type' => $p->material_type,
                 'variants' => $p->variants->map(fn ($v) => [
                     'id' => $v->id,
                     'label' => trim("{$v->size} {$v->color}"),
@@ -293,6 +296,10 @@ class PurchaseOrderController extends Controller
                     'quantity_received' => $i->quantity_received,
                     'unit_cost' => (float) $i->unit_cost,
                     'line_total' => (float) $i->line_total,
+                    'unit'          => $i->product?->unit,
+                    'tiles_per_box' => $i->product?->tiles_per_box,
+                    'sq_m_per_box'  => $i->product?->sq_m_per_box ? (float) $i->product->sq_m_per_box : null,
+                    'material_type' => $i->product?->material_type,
                 ]),
                 'payments' => $payments->map(fn ($p) => [
                     'id' => $p->id,
@@ -329,9 +336,11 @@ class PurchaseOrderController extends Controller
         }
 
         $validated = $request->validate([
-            'items' => 'required|array',
-            'items.*.id' => 'required|exists:purchase_order_items,id',
-            'items.*.quantity_received' => 'required|integer|min:0',
+            'items'                          => 'required|array',
+            'items.*.id'                     => 'required|exists:purchase_order_items,id',
+            'items.*.quantity_received'      => 'required|integer|min:0',
+            'items.*.boxes_count'            => 'nullable|integer|min:0',
+            'items.*.loose_tiles_count'      => 'nullable|integer|min:0',
         ]);
 
         $tenant = auth()->user()->tenant;
@@ -358,6 +367,10 @@ class PurchaseOrderController extends Controller
                 }
 
                 if ($qtyReceived > 0 && $branch) {
+                    $boxesCount      = isset($lineInput['boxes_count']) ? (int) $lineInput['boxes_count'] : null;
+                    $looseTilesCount = isset($lineInput['loose_tiles_count']) ? (int) $lineInput['loose_tiles_count'] : null;
+                    $hasBoxData      = $boxesCount !== null || $looseTilesCount !== null;
+
                     // Increment stock
                     $stock = StockLevel::firstOrCreate(
                         ['product_id' => $item->product_id, 'branch_id' => $branch->id, 'variant_id' => $item->variant_id],
@@ -366,18 +379,28 @@ class PurchaseOrderController extends Controller
                     $before = $stock->quantity;
                     $stock->increment('quantity', $qtyReceived);
 
+                    if ($hasBoxData) {
+                        $stock->update([
+                            'boxes_count'       => $boxesCount ?? 0,
+                            'loose_tiles_count' => $looseTilesCount ?? 0,
+                            'box_count_at'      => now(),
+                        ]);
+                    }
+
                     // Log the stock adjustment
                     StockAdjustment::create([
-                        'tenant_id' => $order->tenant_id,
-                        'branch_id' => $branch->id,
-                        'product_id' => $item->product_id,
-                        'variant_id' => $item->variant_id,
-                        'user_id' => auth()->id(),
-                        'quantity_before' => $before,
-                        'quantity_change' => $qtyReceived,
-                        'quantity_after' => $before + $qtyReceived,
-                        'reason' => 'purchase',
-                        'notes' => "PO {$order->po_number}",
+                        'tenant_id'         => $order->tenant_id,
+                        'branch_id'         => $branch->id,
+                        'product_id'        => $item->product_id,
+                        'variant_id'        => $item->variant_id,
+                        'user_id'           => auth()->id(),
+                        'quantity_before'   => $before,
+                        'quantity_change'   => $qtyReceived,
+                        'quantity_after'    => $before + $qtyReceived,
+                        'reason'            => 'purchase',
+                        'notes'             => "PO {$order->po_number}",
+                        'boxes_count'       => $boxesCount,
+                        'loose_tiles_count' => $looseTilesCount,
                     ]);
 
                     // Update product cost price to latest received cost

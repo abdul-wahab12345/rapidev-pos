@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { useConfirm } from '@/composables/useConfirm';
+import { formatUnit } from '@/utils/format';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { Layers, Printer, Trash2, Truck } from 'lucide-vue-next';
 
@@ -57,7 +58,7 @@ function printChallan() {
             </td>
             <td class="mono">${item.lot_number ?? '—'}</td>
             <td class="r fw">${item.quantity}</td>
-            <td>${item.product_unit}</td>
+            <td>${formatUnit(item.product_unit)}</td>
         </tr>`).join('');
 
     const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/>
@@ -267,7 +268,7 @@ ${c.notes ? `<div style="border:1px solid #ddd;border-radius:4px;padding:6px 10p
                             </td>
                             <td class="px-4 py-3 font-mono text-sm text-muted-foreground">{{ item.lot_number ?? '—' }}</td>
                             <td class="px-4 py-3 text-end tabular-nums font-medium">{{ item.quantity }}</td>
-                            <td class="px-4 py-3 text-muted-foreground">{{ item.product_unit }}</td>
+                            <td class="px-4 py-3 text-muted-foreground">{{ formatUnit(item.product_unit) }}</td>
                         </tr>
                     </tbody>
                 </table>

@@ -37,12 +37,16 @@ export interface CartItem {
     name: string;
     name_ur: string | null;
     variant_label: string | null;
+    unit: string | null;
     unit_price: number;
     cost_price: number;
     quantity: number;
     /** PKR discounted off each unit; line discount = this × quantity */
     discount_per_unit: number;
     stock: number;
+    tiles_per_box: number | null;
+    sq_m_per_box: number | null;
+    material_type: string | null;
 }
 
 export interface Customer {
@@ -189,6 +193,7 @@ export const useCartStore = defineStore('cart', () => {
                 name: product.name,
                 name_ur: product.name_ur ?? null,
                 variant_label: variantLabel,
+                unit: product.unit ?? null,
                 unit_price: unitPrice,
                 cost_price: variantCostPrice,
                 quantity: 1,
@@ -196,6 +201,9 @@ export const useCartStore = defineStore('cart', () => {
                 stock: variantId
                     ? (product.variants?.find((v) => v.id === variantId)?.stock ?? product.stock)
                     : product.stock,
+                tiles_per_box: product.tiles_per_box ?? null,
+                sq_m_per_box: product.sq_m_per_box ?? null,
+                material_type: product.material_type ?? null,
             });
         }
     }

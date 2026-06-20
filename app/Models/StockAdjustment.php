@@ -14,6 +14,15 @@ class StockAdjustment extends Model
         'tenant_id', 'branch_id', 'product_id', 'variant_id', 'user_id',
         'quantity_before', 'quantity_change', 'quantity_after',
         'reason', 'notes',
+        'boxes_count', 'loose_tiles_count',
+    ];
+
+    protected $casts = [
+        'quantity_before'   => 'decimal:2',
+        'quantity_change'   => 'decimal:2',
+        'quantity_after'    => 'decimal:2',
+        'boxes_count'       => 'integer',
+        'loose_tiles_count' => 'integer',
     ];
 
     protected static function booted(): void

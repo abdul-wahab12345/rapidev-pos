@@ -28,7 +28,7 @@ class ReturnService
             $preparedItems   = [];
 
             foreach ($data['items'] as $d) {
-                $qty = (int) $d['quantity_returned'];
+                $qty = (float) $d['quantity_returned'];
                 if ($qty <= 0) continue;
 
                 $saleItem = SaleItem::findOrFail($d['sale_item_id']);
@@ -44,10 +44,12 @@ class ReturnService
                 $totalRefund += $lineTotal;
 
                 $preparedItems[] = [
-                    'saleItem'  => $saleItem,
-                    'qty'       => $qty,
-                    'lineTotal' => $lineTotal,
-                    'restock'   => (bool) ($d['restock'] ?? true),
+                    'saleItem'        => $saleItem,
+                    'qty'             => $qty,
+                    'lineTotal'       => $lineTotal,
+                    'restock'         => (bool) ($d['restock'] ?? true),
+                    'boxes_count'     => isset($d['boxes_count']) ? (int) $d['boxes_count'] : null,
+                    'loose_tiles_count' => isset($d['loose_tiles_count']) ? (int) $d['loose_tiles_count'] : null,
                 ];
             }
 
@@ -83,12 +85,29 @@ class ReturnService
                     'unit_price'        => $d['saleItem']->unit_price,
                     'line_total'        => $d['lineTotal'],
                     'restock'           => $d['restock'],
+                    'boxes_count'       => $d['boxes_count'],
+                    'loose_tiles_count' => $d['loose_tiles_count'],
                 ]);
 
                 if ($d['restock']) {
-                    StockLevel::where('product_id', $d['saleItem']->product_id)
+                    $stockLevel = StockLevel::where('product_id', $d['saleItem']->product_id)
                         ->when($d['saleItem']->variant_id, fn ($q) => $q->where('variant_id', $d['saleItem']->variant_id))
-                        ->increment('quantity', $d['qty']);
+                        ->first();
+
+                    if ($stockLevel) {
+                        $stockLevel->increment('quantity', $d['qty']);
+
+                        // Update box/tile snapshot if the customer returned counted boxes
+                        if ($d['boxes_count'] !== null || $d['loose_tiles_count'] !== null) {
+                            $newBoxes = ($stockLevel->boxes_count ?? 0) + ($d['boxes_count'] ?? 0);
+                            $newLoose = ($stockLevel->loose_tiles_count ?? 0) + ($d['loose_tiles_count'] ?? 0);
+                            $stockLevel->update([
+                                'boxes_count'       => $newBoxes,
+                                'loose_tiles_count' => $newLoose,
+                                'box_count_at'      => now(),
+                            ]);
+                        }
+                    }
                 }
             }
 
@@ -142,7 +161,7 @@ class ReturnService
             ->selectRaw('sale_item_id, SUM(quantity_returned) as total_returned')
             ->groupBy('sale_item_id')
             ->pluck('total_returned', 'sale_item_id')
-            ->map(fn ($v) => (int) $v)
+            ->map(fn ($v) => (float) $v)
             ->toArray();
     }
 

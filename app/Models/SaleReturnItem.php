@@ -14,13 +14,16 @@ class SaleReturnItem extends Model
         'sale_return_id', 'sale_item_id', 'product_id', 'variant_id',
         'product_name', 'variant_label',
         'quantity_returned', 'unit_price', 'line_total', 'restock',
+        'boxes_count', 'loose_tiles_count',
     ];
 
     protected $casts = [
-        'quantity_returned' => 'integer',
+        'quantity_returned' => 'decimal:2',
         'unit_price'        => 'integer',
         'line_total'        => 'integer',
         'restock'           => 'boolean',
+        'boxes_count'       => 'integer',
+        'loose_tiles_count' => 'integer',
     ];
 
     protected static function booted(): void

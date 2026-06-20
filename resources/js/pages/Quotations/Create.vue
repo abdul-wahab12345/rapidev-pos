@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
-import { formatMoney } from '@/utils/format';
+import { formatMoney, formatUnit } from '@/utils/format';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { Calculator, Plus, Search, Trash2 } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
@@ -202,7 +202,7 @@ function submit() {
 
                                 <div class="grid grid-cols-4 gap-2">
                                     <div>
-                                        <label class="block text-xs text-muted-foreground mb-1">Qty / {{ item.product_unit }}</label>
+                                        <label class="block text-xs text-muted-foreground mb-1">Qty / {{ formatUnit(item.product_unit) }}</label>
                                         <input v-model.number="item.quantity" type="number" step="0.001" min="0.001"
                                             class="w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring" />
                                     </div>

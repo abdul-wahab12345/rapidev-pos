@@ -27,6 +27,9 @@ interface SaleItem {
     discount: number;
     line_total: number;
     quantity_returnable: number;
+    tiles_per_box: number | null;
+    sq_m_per_box: number | null;
+    material_type: string | null;
 }
 
 interface SaleReturnRow {
@@ -69,13 +72,36 @@ const props = defineProps<{ sale: Sale }>();
 const showReturnModal = ref(false);
 
 // Per-item return quantities keyed by sale_item_id
-const returnQtys    = reactive<Record<string, number>>({});
-const returnRestock = reactive<Record<string, boolean>>({});
+const returnQtys       = reactive<Record<string, number>>({});
+const returnRestock    = reactive<Record<string, boolean>>({});
+const returnBoxes      = reactive<Record<string, number | ''>>({});
+const returnLooseTiles = reactive<Record<string, number | ''>>({});
+
+function isTileProduct(item: SaleItem): boolean {
+    return !!(item.tiles_per_box && item.tiles_per_box > 0 &&
+              ['tile','ceramic','mosaic','border'].includes(item.material_type ?? ''));
+}
+
+// Returns m² to return based on entered boxes + loose tiles
+function computedQtyFromBoxes(item: SaleItem): number {
+    if (!isTileProduct(item) || !item.sq_m_per_box || !item.tiles_per_box) return 0;
+    const boxes = Number(returnBoxes[item.id] || 0);
+    const loose = Number(returnLooseTiles[item.id] || 0);
+    const sqmPerTile = item.sq_m_per_box / item.tiles_per_box;
+    const totalTiles = boxes * item.tiles_per_box + loose;
+    return Math.round(totalTiles * sqmPerTile * 100) / 100;
+}
+
+function hasTileEntry(item: SaleItem): boolean {
+    return Number(returnBoxes[item.id] || 0) > 0 || Number(returnLooseTiles[item.id] || 0) > 0;
+}
 
 function openReturnModal() {
     props.sale.items.forEach(item => {
-        returnQtys[item.id]    = item.quantity_returnable > 0 ? item.quantity_returnable : 0;
-        returnRestock[item.id] = true;
+        returnQtys[item.id]       = item.quantity_returnable > 0 ? item.quantity_returnable : 0;
+        returnRestock[item.id]    = true;
+        returnBoxes[item.id]      = '';
+        returnLooseTiles[item.id] = '';
     });
     returnForm.refund_method = 'cash';
     returnForm.reason        = '';
@@ -87,7 +113,7 @@ const returnForm = useForm({
     refund_method: 'cash',
     reason:        '',
     notes:         '',
-    items:         [] as { sale_item_id: string; quantity_returned: number; restock: boolean }[],
+    items:         [] as { sale_item_id: string; quantity_returned: number; restock: boolean; boxes_count?: number; loose_tiles_count?: number }[],
 });
 
 const returnableItems = computed(() =>
@@ -96,18 +122,38 @@ const returnableItems = computed(() =>
 
 const computedRefundTotal = computed(() =>
     props.sale.items.reduce((sum, item) => {
-        const qty = Math.min(returnQtys[item.id] ?? 0, item.quantity_returnable);
+        let qty: number;
+        if (isTileProduct(item) && hasTileEntry(item)) {
+            qty = Math.min(computedQtyFromBoxes(item), item.quantity_returnable);
+        } else {
+            qty = Math.min(returnQtys[item.id] ?? 0, item.quantity_returnable);
+        }
         return sum + item.unit_price * qty;
     }, 0)
 );
 
 function submitReturn() {
     const items = props.sale.items
-        .map(item => ({
-            sale_item_id:      item.id,
-            quantity_returned: Math.min(returnQtys[item.id] ?? 0, item.quantity_returnable),
-            restock:           returnRestock[item.id] ?? true,
-        }))
+        .map(item => {
+            // For tile products with box/tile entry, derive m² quantity automatically
+            let qty: number;
+            if (isTileProduct(item) && hasTileEntry(item)) {
+                qty = Math.min(computedQtyFromBoxes(item), item.quantity_returnable);
+            } else {
+                qty = Math.min(returnQtys[item.id] ?? 0, item.quantity_returnable);
+            }
+
+            const entry: { sale_item_id: string; quantity_returned: number; restock: boolean; boxes_count?: number; loose_tiles_count?: number } = {
+                sale_item_id:      item.id,
+                quantity_returned: qty,
+                restock:           returnRestock[item.id] ?? true,
+            };
+            if (isTileProduct(item) && hasTileEntry(item)) {
+                entry.boxes_count       = Number(returnBoxes[item.id] || 0);
+                entry.loose_tiles_count = Number(returnLooseTiles[item.id] || 0);
+            }
+            return entry;
+        })
         .filter(i => i.quantity_returned > 0);
 
     if (!items.length) {
@@ -406,6 +452,8 @@ async function printReceipt() {
                                 <th class="px-3 py-2 text-center">{{ t('sales.sold') }}</th>
                                 <th class="px-3 py-2 text-center">{{ t('sales.returnable') }}</th>
                                 <th class="px-3 py-2 text-center w-24">{{ t('returns.returnQty') }}</th>
+                                <th class="px-3 py-2 text-center">Boxes</th>
+                                <th class="px-3 py-2 text-center">Tiles</th>
                                 <th class="px-3 py-2 text-center">{{ t('inventory.restock') }}</th>
                             </tr>
                         </thead>
@@ -416,6 +464,7 @@ async function printReceipt() {
                                 <td class="px-3 py-2">
                                     <p class="font-medium text-xs">{{ item.product_name }}</p>
                                     <p v-if="item.variant_label" class="text-xs text-muted-foreground">{{ item.variant_label }}</p>
+                                    <p v-if="item.tiles_per_box" class="text-[10px] text-blue-500">{{ item.tiles_per_box }} tiles/box</p>
                                 </td>
                                 <td class="px-3 py-2 text-center text-muted-foreground text-xs">{{ item.quantity }}</td>
                                 <td class="px-3 py-2 text-center text-xs"
@@ -423,7 +472,12 @@ async function printReceipt() {
                                     {{ item.quantity_returnable }}
                                 </td>
                                 <td class="px-3 py-2">
-                                    <input
+                                    <!-- Tile product: qty auto-computed from boxes/tiles -->
+                                    <div v-if="isTileProduct(item) && hasTileEntry(item)"
+                                        class="w-full rounded border border-primary/40 bg-primary/5 px-2 py-1 text-center text-sm font-medium text-primary">
+                                        {{ Math.min(computedQtyFromBoxes(item), item.quantity_returnable) }} m²
+                                    </div>
+                                    <input v-else
                                         v-model.number="returnQtys[item.id]"
                                         type="number"
                                         :min="0"
@@ -431,6 +485,28 @@ async function printReceipt() {
                                         :disabled="item.quantity_returnable === 0"
                                         class="w-full rounded border border-input bg-background px-2 py-1 text-center text-sm disabled:opacity-40"
                                     />
+                                </td>
+                                <!-- Boxes (tile products only) -->
+                                <td class="px-3 py-2">
+                                    <input v-if="isTileProduct(item)"
+                                        v-model.number="returnBoxes[item.id]"
+                                        type="number" min="0"
+                                        :disabled="item.quantity_returnable === 0"
+                                        placeholder="0"
+                                        class="w-14 rounded border border-input bg-background px-2 py-1 text-center text-xs disabled:opacity-40"
+                                    />
+                                    <span v-else class="block text-center text-muted-foreground text-xs">—</span>
+                                </td>
+                                <!-- Loose tiles (tile products only) -->
+                                <td class="px-3 py-2">
+                                    <input v-if="isTileProduct(item)"
+                                        v-model.number="returnLooseTiles[item.id]"
+                                        type="number" min="0" :max="(item.tiles_per_box ?? 1) - 1"
+                                        :disabled="item.quantity_returnable === 0"
+                                        placeholder="0"
+                                        class="w-14 rounded border border-input bg-background px-2 py-1 text-center text-xs disabled:opacity-40"
+                                    />
+                                    <span v-else class="block text-center text-muted-foreground text-xs">—</span>
                                 </td>
                                 <td class="px-3 py-2 text-center">
                                     <input

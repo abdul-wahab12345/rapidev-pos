@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { useConfirm } from '@/composables/useConfirm';
-import { formatMoney } from '@/utils/format';
+import { formatMoney, formatUnit } from '@/utils/format';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { CheckCircle, ChevronDown, Edit, FileText, Printer, ShoppingCart, Trash2 } from 'lucide-vue-next';
 import { ref } from 'vue';
@@ -72,7 +72,7 @@ function printQuotation() {
             <td class="num">${i + 1}</td>
             <td>
                 <strong>${item.product_name}</strong>
-                ${item.product_unit ? `<br><span style="font-size:11px;color:#666">${item.product_unit}${item.material_type ? ' · ' + item.material_type : ''}</span>` : ''}
+                ${item.product_unit ? `<br><span style="font-size:11px;color:#666">${formatUnit(item.product_unit)}${item.material_type ? ' · ' + item.material_type : ''}</span>` : ''}
                 ${item.notes ? `<br><span style="font-size:11px;color:#888;font-style:italic">${item.notes}</span>` : ''}
             </td>
             <td class="r">${item.quantity}</td>
@@ -349,7 +349,7 @@ ${q.notes ? `
                             <td class="px-4 py-3">
                                 <p class="font-medium">{{ item.product_name }}</p>
                                 <p class="text-xs text-muted-foreground">
-                                    {{ item.product_unit }}
+                                    {{ formatUnit(item.product_unit) }}
                                     <span v-if="item.material_type" class="capitalize"> · {{ item.material_type }}</span>
                                     <span v-if="item.sq_m_per_box > 0" class="text-blue-500"> · {{ item.sq_m_per_box }}m²/box</span>
                                 </p>

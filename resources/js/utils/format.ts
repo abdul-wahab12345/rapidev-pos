@@ -18,3 +18,23 @@ export function formatDateTime(dt: string, includeWeekday = false, locale: strin
 
 export const isUrdu = (text: string): boolean =>
     /[\u0600-\u06FF\u0750-\u077F]/.test(text);
+
+const UNIT_LABELS: Record<string, string> = {
+    sq_m:   'm\u00B2',
+    sq_ft:  'ft\u00B2',
+    piece:  'pcs',
+    pcs:    'pcs',
+    kg:     'kg',
+    gram:   'g',
+    liter:  'L',
+    meter:  'm',
+    dozen:  'doz',
+    box:    'box',
+    bag:    'bag',
+    ton:    'ton',
+};
+
+export function formatUnit(unit: string | null | undefined): string {
+    if (!unit) return '';
+    return UNIT_LABELS[unit] ?? unit;
+}

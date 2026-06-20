@@ -96,22 +96,28 @@ class StockController extends Controller
         return Inertia::render('Inventory/Stock/Index', [
             'stock'             => [
                 'data'         => collect($stock->items())->map(fn ($s) => [
-                    'id'            => $s->id,
-                    'product_id'    => $s->product_id,
-                    'variant_id'    => $s->variant_id,
-                    'quantity'      => $s->quantity,
-                    'reorder_level' => $s->product?->reorder_level ?? 5,
-                    'product'       => [
-                        'id'       => $s->product?->id,
-                        'name'     => $s->product?->name,
-                        'sku'      => $s->product?->sku,
-                        'unit'     => $s->product?->unit,
-                        'category' => $s->product?->category ? [
+                    'id'                 => $s->id,
+                    'product_id'         => $s->product_id,
+                    'variant_id'         => $s->variant_id,
+                    'quantity'           => $s->quantity,
+                    'boxes_count'        => $s->boxes_count,
+                    'loose_tiles_count'  => $s->loose_tiles_count,
+                    'box_count_at'       => $s->box_count_at?->format('Y-m-d H:i'),
+                    'reorder_level'      => $s->product?->reorder_level ?? 5,
+                    'product'            => [
+                        'id'            => $s->product?->id,
+                        'name'          => $s->product?->name,
+                        'sku'           => $s->product?->sku,
+                        'unit'          => $s->product?->unit,
+                        'tiles_per_box' => $s->product?->tiles_per_box,
+                        'sq_m_per_box'  => $s->product?->sq_m_per_box ? (float) $s->product->sq_m_per_box : null,
+                        'material_type' => $s->product?->material_type,
+                        'category'      => $s->product?->category ? [
                             'name'  => $s->product->category->name,
                             'color' => $s->product->category->color,
                         ] : null,
                     ],
-                    'variant'       => $s->variant ? [
+                    'variant'            => $s->variant ? [
                         'id'    => $s->variant->id,
                         'label' => trim("{$s->variant->size} {$s->variant->color}"),
                     ] : null,
@@ -131,12 +137,15 @@ class StockController extends Controller
     public function adjust(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'product_id' => 'required|exists:products,id',
-            'variant_id' => 'nullable|exists:product_variants,id',
-            'type'       => 'required|in:add,remove,set',
-            'quantity'   => 'required|integer|min:1',
-            'reason'     => 'required|in:purchase,damage,theft,correction,return,other',
-            'notes'      => 'nullable|string|max:500',
+            'product_id'        => 'required|exists:products,id',
+            'variant_id'        => 'nullable|exists:product_variants,id',
+            'type'              => 'required|in:add,remove,set',
+            'quantity'          => 'required|numeric|min:0.01',
+            'reason'            => 'required|in:purchase,damage,theft,correction,return,other',
+            'notes'             => 'nullable|string|max:500',
+            // Optional box/tile breakdown (for tile products)
+            'boxes_count'       => 'nullable|integer|min:0',
+            'loose_tiles_count' => 'nullable|integer|min:0',
         ]);
 
         $tenant = auth()->user()->tenant;
@@ -146,7 +155,11 @@ class StockController extends Controller
             return back()->with('error', 'No branch configured.');
         }
 
-        DB::transaction(function () use ($validated, $tenant, $branch) {
+        $hasBoxData = isset($validated['boxes_count']) || isset($validated['loose_tiles_count']);
+        $boxesCount      = $hasBoxData ? (int) ($validated['boxes_count'] ?? 0) : null;
+        $looseTilesCount = $hasBoxData ? (int) ($validated['loose_tiles_count'] ?? 0) : null;
+
+        DB::transaction(function () use ($validated, $tenant, $branch, $hasBoxData, $boxesCount, $looseTilesCount) {
             $stockLevel = StockLevel::where('product_id', $validated['product_id'])
                 ->where('branch_id', $branch->id)
                 ->when($validated['variant_id'] ?? null, fn ($q) => $q->where('variant_id', $validated['variant_id']))
@@ -163,28 +176,38 @@ class StockController extends Controller
                 ]);
             }
 
-            $before = $stockLevel->quantity;
+            $before = (float) $stockLevel->quantity;
+            $qty    = (float) $validated['quantity'];
 
             $change = match ($validated['type']) {
-                'add'    => $validated['quantity'],
-                'remove' => -$validated['quantity'],
-                'set'    => $validated['quantity'] - $before,
+                'add'    => $qty,
+                'remove' => -$qty,
+                'set'    => $qty - $before,
             };
 
-            $after = max(0, $before + $change);
-            $stockLevel->update(['quantity' => $after]);
+            $after = max(0, round($before + $change, 2));
+
+            $stockLevelData = ['quantity' => $after];
+            if ($hasBoxData) {
+                $stockLevelData['boxes_count']       = $boxesCount;
+                $stockLevelData['loose_tiles_count'] = $looseTilesCount;
+                $stockLevelData['box_count_at']      = now();
+            }
+            $stockLevel->update($stockLevelData);
 
             StockAdjustment::create([
-                'tenant_id'       => $tenant->id,
-                'branch_id'       => $branch->id,
-                'product_id'      => $validated['product_id'],
-                'variant_id'      => $validated['variant_id'] ?? null,
-                'user_id'         => auth()->id(),
-                'quantity_before' => $before,
-                'quantity_change' => $after - $before,
-                'quantity_after'  => $after,
-                'reason'          => $validated['reason'],
-                'notes'           => $validated['notes'] ?? null,
+                'tenant_id'         => $tenant->id,
+                'branch_id'         => $branch->id,
+                'product_id'        => $validated['product_id'],
+                'variant_id'        => $validated['variant_id'] ?? null,
+                'user_id'           => auth()->id(),
+                'quantity_before'   => $before,
+                'quantity_change'   => $after - $before,
+                'quantity_after'    => $after,
+                'reason'            => $validated['reason'],
+                'notes'             => $validated['notes'] ?? null,
+                'boxes_count'       => $boxesCount,
+                'loose_tiles_count' => $looseTilesCount,
             ]);
         });
 

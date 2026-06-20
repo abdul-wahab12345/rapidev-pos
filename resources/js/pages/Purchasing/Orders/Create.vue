@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
+import { formatUnit } from '@/utils/format';
 import { Head, useForm } from '@inertiajs/vue3';
 import { Minus, Plus, ShoppingCart, Trash2 } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
@@ -20,6 +21,7 @@ interface Variant { id: string; label: string; cost_price: number }
 interface Product {
     id: string; name: string; name_ur: string | null; sku: string | null; unit: string;
     cost_price: number; has_variants: boolean; variants: Variant[];
+    tiles_per_box: number | null; sq_m_per_box: number | null; material_type: string | null;
 }
 interface Supplier { id: string; name: string; payment_terms: number }
 
@@ -30,13 +32,45 @@ const props = defineProps<{
     supplier_id?: string;
 }>();
 
+const TILE_TYPES = ['tile', 'ceramic', 'mosaic', 'border'];
+
 interface CartLine {
     product_id: string;
     variant_id: string | null;
     product_name: string;
     variant_label: string | null;
+    unit: string;
     quantity_ordered: number;
     unit_cost: number;
+    // tile product extras
+    tiles_per_box: number | null;
+    sq_m_per_box: number | null;
+    material_type: string | null;
+}
+
+// Per-line entry mode: 'unit' = direct m², 'box' = boxes + loose tiles
+const lineEntryMode = ref<Record<number, 'unit' | 'box'>>({});
+const lineBoxes      = ref<Record<number, number>>({});
+const lineLooseTiles = ref<Record<number, number>>({});
+
+function isTileLine(i: number): boolean {
+    const l = lines.value[i];
+    return !!(l?.tiles_per_box && l.tiles_per_box > 0 &&
+              TILE_TYPES.includes(l.material_type ?? ''));
+}
+
+function boxQty(i: number): number {
+    const l = lines.value[i];
+    if (!l?.tiles_per_box || !l.sq_m_per_box) return 0;
+    const sqmPerTile = l.sq_m_per_box / l.tiles_per_box;
+    const totalTiles = (lineBoxes.value[i] ?? 0) * l.tiles_per_box + (lineLooseTiles.value[i] ?? 0);
+    return Math.round(totalTiles * sqmPerTile * 100) / 100;
+}
+
+function syncBoxQty(i: number) {
+    if (lineEntryMode.value[i] === 'box') {
+        lines.value[i].quantity_ordered = boxQty(i) || lines.value[i].quantity_ordered;
+    }
 }
 
 const lines = ref<CartLine[]>([]);
@@ -77,19 +111,34 @@ function addProduct(p: Product, v?: Variant) {
     if (existing) {
         existing.quantity_ordered++;
     } else {
+        const idx = lines.value.length;
+        const isTile = !!(p.tiles_per_box && p.tiles_per_box > 0 && TILE_TYPES.includes(p.material_type ?? ''));
         lines.value.push({
-            product_id:      pid,
-            variant_id:      vid,
-            product_name:    p.name,
-            variant_label:   v?.label ?? null,
-            quantity_ordered: 1,
-            unit_cost:       v?.cost_price ?? p.cost_price,
+            product_id:       pid,
+            variant_id:       vid,
+            product_name:     p.name,
+            variant_label:    v?.label ?? null,
+            unit:             p.unit,
+            quantity_ordered: isTile ? 0 : 1,
+            unit_cost:        v?.cost_price ?? p.cost_price,
+            tiles_per_box:    p.tiles_per_box,
+            sq_m_per_box:     p.sq_m_per_box,
+            material_type:    p.material_type,
         });
+        // Default tile products to box-entry mode
+        lineEntryMode.value[idx] = isTile ? 'box' : 'unit';
+        lineBoxes.value[idx]      = 0;
+        lineLooseTiles.value[idx] = 0;
     }
     productSearch.value = '';
 }
 
-function removeLine(i: number) { lines.value.splice(i, 1); }
+function removeLine(i: number) {
+    lines.value.splice(i, 1);
+    delete lineEntryMode.value[i];
+    delete lineBoxes.value[i];
+    delete lineLooseTiles.value[i];
+}
 
 const subtotal = computed(() => lines.value.reduce((s, l) => s + l.unit_cost * l.quantity_ordered, 0));
 
@@ -251,21 +300,57 @@ function submit() {
                             class="grid grid-cols-12 gap-2 px-4 py-2 items-center border-t text-sm">
                             <div class="col-span-5">
                                 <div class="font-medium">{{ line.product_name }}</div>
-                                <div v-if="line.variant_label" class="text-muted-foreground text-xs">
-                                    {{ line.variant_label }}
-                                </div>
+                                <div v-if="line.variant_label" class="text-muted-foreground text-xs">{{ line.variant_label }}</div>
+                                <div v-if="line.unit" class="text-muted-foreground text-xs">{{ formatUnit(line.unit) }}</div>
                             </div>
-                            <div class="col-span-2 flex items-center justify-center gap-1">
-                                <button type="button" @click="line.quantity_ordered = Math.max(1, line.quantity_ordered - 1)"
-                                    class="rounded hover:bg-muted p-0.5">
-                                    <Minus :size="12" />
-                                </button>
-                                <input v-model.number="line.quantity_ordered" type="number" min="1"
-                                    class="w-12 text-center border rounded px-1 py-0.5 text-xs bg-background" />
-                                <button type="button" @click="line.quantity_ordered++"
-                                    class="rounded hover:bg-muted p-0.5">
-                                    <Plus :size="12" />
-                                </button>
+                            <div class="col-span-2 flex flex-col items-center gap-1">
+                                <!-- Mode toggle for tile products -->
+                                <div v-if="isTileLine(i)" class="flex rounded border border-border text-[10px] overflow-hidden">
+                                    <button type="button"
+                                        :class="lineEntryMode[i] === 'box' ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:bg-muted'"
+                                        class="px-1.5 py-0.5 transition-colors"
+                                        @click="lineEntryMode[i] = 'box'">Boxes</button>
+                                    <button type="button"
+                                        :class="lineEntryMode[i] === 'unit' ? 'bg-primary text-primary-foreground' : 'bg-background text-muted-foreground hover:bg-muted'"
+                                        class="px-1.5 py-0.5 transition-colors"
+                                        @click="lineEntryMode[i] = 'unit'">m²</button>
+                                </div>
+
+                                <!-- Box entry mode -->
+                                <template v-if="isTileLine(i) && lineEntryMode[i] === 'box'">
+                                    <div class="flex gap-1 w-full">
+                                        <div class="flex-1">
+                                            <div class="text-[9px] text-muted-foreground text-center mb-0.5">Box</div>
+                                            <input v-model.number="lineBoxes[i]" @input="syncBoxQty(i)"
+                                                type="number" min="0" placeholder="0"
+                                                class="w-full text-center border rounded px-1 py-0.5 text-xs bg-background" />
+                                        </div>
+                                        <div class="flex-1">
+                                            <div class="text-[9px] text-muted-foreground text-center mb-0.5">Tile</div>
+                                            <input v-model.number="lineLooseTiles[i]" @input="syncBoxQty(i)"
+                                                type="number" min="0" :max="(line.tiles_per_box ?? 1) - 1" placeholder="0"
+                                                class="w-full text-center border rounded px-1 py-0.5 text-xs bg-background" />
+                                        </div>
+                                    </div>
+                                    <span v-if="boxQty(i) > 0" class="text-[10px] text-primary font-medium">= {{ boxQty(i) }} m²</span>
+                                </template>
+
+                                <!-- Direct m² entry -->
+                                <template v-else>
+                                    <div class="flex items-center gap-1">
+                                        <button type="button" @click="line.quantity_ordered = Math.max(0.01, +(line.quantity_ordered - 1).toFixed(2))"
+                                            class="rounded hover:bg-muted p-0.5">
+                                            <Minus :size="12" />
+                                        </button>
+                                        <input v-model.number="line.quantity_ordered" type="number" min="0.01" step="0.01"
+                                            class="w-14 text-center border rounded px-1 py-0.5 text-xs bg-background" />
+                                        <button type="button" @click="line.quantity_ordered = +(line.quantity_ordered + 1).toFixed(2)"
+                                            class="rounded hover:bg-muted p-0.5">
+                                            <Plus :size="12" />
+                                        </button>
+                                    </div>
+                                    <span v-if="line.unit" class="text-[10px] text-muted-foreground">{{ formatUnit(line.unit) }}</span>
+                                </template>
                             </div>
                             <div class="col-span-2 text-end">
                                 <input v-model.number="line.unit_cost" type="number" min="0" step="0.01"
