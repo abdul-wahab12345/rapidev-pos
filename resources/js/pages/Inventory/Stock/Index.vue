@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import AppLayout from '@/layouts/AppLayout.vue';
 import type { BreadcrumbItem } from '@/types';
-import { formatUnit } from '@/utils/format';
+import { formatQty, formatUnit } from '@/utils/format';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import {
     AlertTriangle,
@@ -126,9 +126,9 @@ const adjustRow  = ref<StockRow | null>(null);
 const form = useForm({
     product_id:        '',
     variant_id:        null as string | null,
-    type:              'add' as 'add' | 'remove' | 'set',
+    type:              'add' as 'add' | 'remove',
     quantity:          1,
-    reason:            'purchase' as string,
+    reason:            'correction' as string,
     notes:             '',
     boxes_count:       null as number | null,
     loose_tiles_count: null as number | null,
@@ -161,7 +161,7 @@ function openAdjust(row: StockRow) {
     form.variant_id        = row.variant_id;
     form.type              = 'add';
     form.quantity          = 1;
-    form.reason            = 'purchase';
+    form.reason            = 'correction';
     form.notes             = '';
     form.boxes_count       = null;
     form.loose_tiles_count = null;
@@ -222,11 +222,9 @@ function fmtDate(d: string) {
 }
 
 const reasonLabel = computed<Record<string, string>>(() => ({
-    purchase: t('inventory.adjustReasonPurchase'),
     damage: t('inventory.adjustReasonDamage'),
     theft: t('inventory.adjustReasonTheft'),
     correction: t('inventory.adjustReasonCorrection'),
-    return: t('inventory.adjustReasonReturn'),
     other: t('inventory.adjustReasonOther'),
 }));
 
@@ -238,14 +236,11 @@ const stockHistoryTabs = computed(() => [
 const adjustTypeButtons = computed(() => [
     { id: 'add' as const, label: t('inventory.addQty'), icon: ArrowUpCircle },
     { id: 'remove' as const, label: t('inventory.removeQty'), icon: ArrowDownCircle },
-    { id: 'set' as const, label: t('inventory.setTo'), icon: Package },
 ]);
 
-const qtyAdjustPlaceholder = computed(() => {
-    if (form.type === 'set') return t('inventory.placeholderNewStockLevel');
-    if (form.type === 'add') return t('inventory.placeholderQtyToAdd');
-    return t('inventory.placeholderQtyToRemove');
-});
+const qtyAdjustPlaceholder = computed(() =>
+    form.type === 'add' ? t('inventory.placeholderQtyToAdd') : t('inventory.placeholderQtyToRemove')
+);
 </script>
 
 <template>
@@ -365,7 +360,7 @@ const qtyAdjustPlaceholder = computed(() => {
                                 </td>
                                 <td class="px-4 py-3 text-muted-foreground font-mono text-xs">{{ row.product.sku ?? '—' }}</td>
                                 <td class="px-4 py-3 text-center font-bold tabular-nums text-foreground">
-                                    {{ row.quantity }}
+                                    {{ formatQty(row.quantity, row.product.unit) }}
                                     <span v-if="row.product.unit" class="text-xs font-normal text-muted-foreground"> {{ formatUnit(row.product.unit) }}</span>
                                     <div v-if="liveBoxCount(row)" class="text-xs font-normal text-muted-foreground mt-0.5">
                                         ≈{{ liveBoxCount(row)!.boxes }} box
@@ -485,7 +480,7 @@ const qtyAdjustPlaceholder = computed(() => {
                     <p class="font-semibold text-foreground">{{ adjustRow.product.name }}</p>
                     <p v-if="adjustRow.variant" class="text-xs text-muted-foreground">{{ adjustRow.variant.label }}</p>
                     <p class="mt-1 text-sm text-muted-foreground">
-                        {{ t('inventory.currentStock') }}: <strong class="text-foreground">{{ adjustRow.quantity }}</strong>
+                        {{ t('inventory.currentStock') }}: <strong class="text-foreground">{{ formatQty(adjustRow.quantity, adjustRow.product.unit) }}</strong>
                         <span v-if="adjustRow.product.unit"> {{ formatUnit(adjustRow.product.unit) }}</span>
                     </p>
                 </div>
@@ -529,7 +524,7 @@ const qtyAdjustPlaceholder = computed(() => {
                         Set sq_m_per_box on the product to enable automatic m² calculation.
                     </div>
                     <p v-if="previewQty !== null && tileComputedQty !== null" class="text-xs text-muted-foreground">
-                        {{ t('inventory.stockAfterAdjustment') }}: <strong class="text-foreground">{{ previewQty }} {{ formatUnit(adjustRow?.product.unit) }}</strong>
+                        {{ t('inventory.stockAfterAdjustment') }}: <strong class="text-foreground">{{ formatQty(previewQty ?? 0, adjustRow?.product.unit) }} {{ formatUnit(adjustRow?.product.unit) }}</strong>
                     </p>
                     <p v-if="form.errors.quantity" class="text-xs text-destructive">{{ form.errors.quantity }}</p>
                 </div>
@@ -544,7 +539,7 @@ const qtyAdjustPlaceholder = computed(() => {
                         :placeholder="qtyAdjustPlaceholder"
                     />
                     <p v-if="previewQty !== null" class="text-xs text-muted-foreground">
-                        {{ t('inventory.stockAfterAdjustment') }}: <strong class="text-foreground">{{ previewQty }}</strong>
+                        {{ t('inventory.stockAfterAdjustment') }}: <strong class="text-foreground">{{ formatQty(previewQty ?? 0, adjustRow?.product.unit) }} {{ formatUnit(adjustRow?.product.unit) }}</strong>
                     </p>
                     <p v-if="form.errors.quantity" class="text-xs text-destructive">{{ form.errors.quantity }}</p>
                 </div>

@@ -139,9 +139,9 @@ class StockController extends Controller
         $validated = $request->validate([
             'product_id'        => 'required|exists:products,id',
             'variant_id'        => 'nullable|exists:product_variants,id',
-            'type'              => 'required|in:add,remove,set',
+            'type'              => 'required|in:add,remove',
             'quantity'          => 'required|numeric|min:0.01',
-            'reason'            => 'required|in:purchase,damage,theft,correction,return,other',
+            'reason'            => 'required|in:damage,theft,correction,other',
             'notes'             => 'nullable|string|max:500',
             // Optional box/tile breakdown (for tile products)
             'boxes_count'       => 'nullable|integer|min:0',
@@ -182,7 +182,6 @@ class StockController extends Controller
             $change = match ($validated['type']) {
                 'add'    => $qty,
                 'remove' => -$qty,
-                'set'    => $qty - $before,
             };
 
             $after = max(0, round($before + $change, 2));

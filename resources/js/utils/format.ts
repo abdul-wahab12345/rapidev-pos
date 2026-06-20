@@ -38,3 +38,13 @@ export function formatUnit(unit: string | null | undefined): string {
     if (!unit) return '';
     return UNIT_LABELS[unit] ?? unit;
 }
+
+// Units that are always whole numbers — no decimal display needed
+const WHOLE_UNITS = new Set(['piece', 'pcs', 'box', 'bag', 'dozen', 'ton']);
+
+export function formatQty(quantity: number | string, unit: string | null | undefined): string {
+    const n = Number(quantity);
+    if (WHOLE_UNITS.has(unit ?? '')) return Math.round(n).toString();
+    // Decimal units: show up to 2 decimal places, trimming trailing zeros
+    return parseFloat(n.toFixed(2)).toString();
+}
