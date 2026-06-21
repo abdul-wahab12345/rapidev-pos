@@ -118,6 +118,7 @@ class ProductController extends Controller
             'tile_width_in'  => 'nullable|numeric|min:0',
             'tile_height_in' => 'nullable|numeric|min:0',
             'tiles_per_box'  => 'nullable|integer|min:1',
+            'sq_m_per_box'   => 'nullable|numeric|min:0',
             // Variants
             'variants'              => 'nullable|array',
             'variants.*.size'       => 'nullable|string',
@@ -148,7 +149,8 @@ class ProductController extends Controller
             'tile_width_in'  => $validated['tile_width_in'] ?? null,
             'tile_height_in' => $validated['tile_height_in'] ?? null,
             'tiles_per_box'  => $validated['tiles_per_box'] ?? null,
-            // sq_m_per_box auto-computed by model booted() hook
+            // Source of truth for tile area; model hook only fills it if left blank
+            'sq_m_per_box'   => $validated['sq_m_per_box'] ?? null,
         ]);
 
         $branch = auth()->user()->tenant?->defaultBranch();
@@ -259,6 +261,7 @@ class ProductController extends Controller
             'tile_width_in'  => 'nullable|numeric|min:0',
             'tile_height_in' => 'nullable|numeric|min:0',
             'tiles_per_box'  => 'nullable|integer|min:1',
+            'sq_m_per_box'   => 'nullable|numeric|min:0',
         ]);
 
         $product->update([
@@ -281,7 +284,8 @@ class ProductController extends Controller
             'tile_width_in'  => $validated['tile_width_in'] ?? null,
             'tile_height_in' => $validated['tile_height_in'] ?? null,
             'tiles_per_box'  => $validated['tiles_per_box'] ?? null,
-            // sq_m_per_box auto-recomputed via model booted() hook
+            // Source of truth for tile area; model hook only fills it if left blank
+            'sq_m_per_box'   => $validated['sq_m_per_box'] ?? null,
         ]);
 
         return redirect()->route('inventory.products.index')

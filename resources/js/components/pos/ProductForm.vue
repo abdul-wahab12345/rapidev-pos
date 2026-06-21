@@ -53,6 +53,7 @@ const form = useForm({
     tile_width_in: props.product?.tile_width_in ?? '',
     tile_height_in: props.product?.tile_height_in ?? '',
     tiles_per_box: props.product?.tiles_per_box ?? '',
+    sq_m_per_box: props.product?.sq_m_per_box ?? '',
     variants: (props.product?.variants ?? []) as VariantRow[],
 });
 
@@ -64,11 +65,26 @@ const margin = computed(() => {
 
 const isTileType = computed(() => ['tile', 'ceramic', 'mosaic', 'border'].includes(form.material_type));
 
-const computedSqMPerBox = computed(() => {
+// Suggested m²/box derived from NOMINAL inch dimensions. Inches are marketing
+// sizes (24" ≈ 60.96 cm), so this is only an estimate — the user should enter the
+// real m²/box printed on the supplier's box (e.g. 60×120 cm box = 1.44 m²).
+const suggestedSqMPerBox = computed(() => {
     const w = Number(form.tile_width_in);
     const h = Number(form.tile_height_in);
     const n = Number(form.tiles_per_box);
     if (w > 0 && h > 0 && n > 0) return Math.round((w * 0.0254) * (h * 0.0254) * n * 10000) / 10000;
+    return null;
+});
+
+function useSuggestedSqM() {
+    if (suggestedSqMPerBox.value !== null) form.sq_m_per_box = suggestedSqMPerBox.value;
+}
+
+// Resulting m² per single tile — the value all sales/return/PO math uses
+const sqMPerTile = computed(() => {
+    const box = Number(form.sq_m_per_box);
+    const n = Number(form.tiles_per_box);
+    if (box > 0 && n > 0) return Math.round((box / n) * 10000) / 10000;
     return null;
 });
 
@@ -187,36 +203,59 @@ function cancel() { router.get(route('inventory.products.index')); }
                     <template v-if="isTileType">
                         <hr class="border-border" />
                         <div>
-                            <p class="text-sm font-semibold mb-1">Box / Tile Dimensions</p>
-                            <p class="text-xs text-muted-foreground mb-3">Used for area calculator — how many sq meters one box covers.</p>
-                            <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                            <p class="text-sm font-semibold mb-1">Box / Tile Coverage</p>
+                            <p class="text-xs text-muted-foreground mb-3">
+                                Enter <strong>m² per box</strong> exactly as printed on the supplier's box. All sales, returns and stock math use this value.
+                            </p>
+
+                            <!-- Primary inputs: tiles/box + m²/box -->
+                            <div class="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label class="block text-xs font-medium mb-1.5">Tile Width (inches)</label>
+                                    <label class="block text-xs font-medium mb-1.5">Tiles per Box <span class="text-red-500">*</span></label>
+                                    <input v-model="form.tiles_per_box" type="number" step="1" min="1" placeholder="e.g. 2"
+                                        class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium mb-1.5">m² per Box <span class="text-red-500">*</span></label>
+                                    <div class="relative">
+                                        <input v-model="form.sq_m_per_box" type="number" step="0.0001" min="0" placeholder="e.g. 1.44"
+                                            class="w-full rounded-lg border border-input bg-background px-3 py-2 pe-10 text-sm font-semibold text-primary focus:outline-none focus:ring-2 focus:ring-ring" />
+                                        <span class="pointer-events-none absolute end-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">m²</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Per-tile coverage preview -->
+                            <div v-if="sqMPerTile !== null" class="mt-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-2.5 text-sm text-emerald-700 dark:text-emerald-300">
+                                1 box = <strong>{{ form.sq_m_per_box }} m²</strong> ·
+                                1 tile = <strong>{{ sqMPerTile }} m²</strong>
+                                ({{ form.tiles_per_box }} tiles/box)
+                            </div>
+
+                            <!-- Nominal size (label only) -->
+                            <p class="mt-4 mb-2 text-xs font-medium text-muted-foreground">Nominal size <span class="font-normal">(for labels/invoices only — not used for area)</span></p>
+                            <div class="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                                <div>
+                                    <label class="block text-xs font-medium mb-1.5">Width (inches)</label>
                                     <input v-model="form.tile_width_in" type="number" step="0.25" min="0" placeholder="e.g. 24"
                                         class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
                                 </div>
                                 <div>
-                                    <label class="block text-xs font-medium mb-1.5">Tile Height (inches)</label>
-                                    <input v-model="form.tile_height_in" type="number" step="0.25" min="0" placeholder="e.g. 24"
+                                    <label class="block text-xs font-medium mb-1.5">Height (inches)</label>
+                                    <input v-model="form.tile_height_in" type="number" step="0.25" min="0" placeholder="e.g. 48"
                                         class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
                                 </div>
-                                <div>
-                                    <label class="block text-xs font-medium mb-1.5">Tiles per Box</label>
-                                    <input v-model="form.tiles_per_box" type="number" step="1" min="1" placeholder="e.g. 4"
-                                        class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
-                                </div>
-                                <div>
-                                    <label class="block text-xs font-medium mb-1.5">Sq.m per Box</label>
-                                    <div class="flex h-9 items-center rounded-lg border bg-muted/50 px-3 text-sm font-semibold text-primary">
-                                        {{ computedSqMPerBox !== null ? computedSqMPerBox + ' m²' : '—' }}
-                                    </div>
-                                    <p class="mt-1 text-xs text-muted-foreground">Auto-computed</p>
+                                <div class="flex items-end">
+                                    <button v-if="suggestedSqMPerBox !== null" type="button" @click="useSuggestedSqM"
+                                        class="w-full rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-xs font-medium text-blue-700 dark:text-blue-300 hover:bg-blue-500/20 transition-colors">
+                                        Use ≈{{ suggestedSqMPerBox }} m² from size
+                                    </button>
                                 </div>
                             </div>
-                            <div v-if="computedSqMPerBox !== null" class="mt-3 rounded-lg bg-blue-500/10 border border-blue-500/20 px-4 py-2.5 text-sm text-blue-700 dark:text-blue-300">
-                                1 box of <strong>{{ form.tile_width_in }}×{{ form.tile_height_in }} inch</strong> tiles
-                                ({{ form.tiles_per_box }} tiles/box) covers <strong>{{ computedSqMPerBox }} m²</strong>
-                            </div>
+                            <p v-if="suggestedSqMPerBox !== null && Number(form.sq_m_per_box) > 0 && Math.abs(suggestedSqMPerBox - Number(form.sq_m_per_box)) > 0.02"
+                                class="mt-2 text-xs text-amber-600 dark:text-amber-400">
+                                Note: nominal size suggests ≈{{ suggestedSqMPerBox }} m², but you entered {{ form.sq_m_per_box }} m². That's expected — nominal inches (e.g. 24"=60.96cm) differ from the real box size.
+                            </p>
                         </div>
                     </template>
                 </div>

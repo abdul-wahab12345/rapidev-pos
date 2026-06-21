@@ -562,6 +562,14 @@ async function printReceipt() {
 
             </div>
 
+            <!-- Validation error summary -->
+            <div v-if="Object.keys(returnForm.errors).length" class="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                <p class="font-semibold mb-1">{{ t('common.pleaseFixErrors') }}</p>
+                <ul class="list-disc ms-5 space-y-0.5">
+                    <li v-for="(msg, key) in returnForm.errors" :key="key">{{ msg }}</li>
+                </ul>
+            </div>
+
             <DialogFooter class="pt-2">
                 <Button type="button" variant="outline" @click="showReturnModal = false">{{ t('common.cancel') }}</Button>
                 <Button

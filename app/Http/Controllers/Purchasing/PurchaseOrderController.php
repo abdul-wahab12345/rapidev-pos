@@ -132,7 +132,7 @@ class PurchaseOrderController extends Controller
             'items' => 'required|array|min:1',
             'items.*.product_id' => 'required|exists:products,id',
             'items.*.variant_id' => 'nullable|exists:product_variants,id',
-            'items.*.quantity_ordered' => 'required|integer|min:1',
+            'items.*.quantity_ordered' => 'required|numeric|min:0.01',
             'items.*.unit_cost' => 'required|numeric|min:0',
             'items.*.product_name' => 'required|string',
             'items.*.variant_label' => 'nullable|string',
@@ -166,7 +166,7 @@ class PurchaseOrderController extends Controller
             ]);
 
             foreach ($validated['items'] as $item) {
-                $qty = (int) $item['quantity_ordered'];
+                $qty = (float) $item['quantity_ordered'];
 
                 PurchaseOrderItem::create([
                     'purchase_order_id' => $po->id,
@@ -338,7 +338,7 @@ class PurchaseOrderController extends Controller
         $validated = $request->validate([
             'items'                          => 'required|array',
             'items.*.id'                     => 'required|exists:purchase_order_items,id',
-            'items.*.quantity_received'      => 'required|integer|min:0',
+            'items.*.quantity_received'      => 'required|numeric|min:0',
             'items.*.boxes_count'            => 'nullable|integer|min:0',
             'items.*.loose_tiles_count'      => 'nullable|integer|min:0',
         ]);
@@ -356,7 +356,7 @@ class PurchaseOrderController extends Controller
                     continue;
                 }
 
-                $qtyReceived = min((int) $lineInput['quantity_received'], $item->quantity_ordered);
+                $qtyReceived = min((float) $lineInput['quantity_received'], (float) $item->quantity_ordered);
                 $item->update(['quantity_received' => $qtyReceived]);
 
                 if ($qtyReceived < $item->quantity_ordered) {
@@ -530,7 +530,7 @@ class PurchaseOrderController extends Controller
             'notes' => 'nullable|string|max:500',
             'items' => 'required|array|min:1',
             'items.*.purchase_order_item_id' => 'required|exists:purchase_order_items,id',
-            'items.*.quantity_returned' => 'required|integer|min:1',
+            'items.*.quantity_returned' => 'required|numeric|min:0.01',
         ]);
 
         $tenant = auth()->user()->tenant;
@@ -556,7 +556,7 @@ class PurchaseOrderController extends Controller
                     continue;
                 }
 
-                $qty = (int) $line['quantity_returned'];
+                $qty = (float) $line['quantity_returned'];
                 $lineTotal = (float) $item->unit_cost * $qty;
                 $total += $lineTotal;
 

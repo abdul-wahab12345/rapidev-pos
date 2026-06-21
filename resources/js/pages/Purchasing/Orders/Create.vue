@@ -168,6 +168,14 @@ function submit() {
                 <p class="text-muted-foreground text-sm mt-1">{{ t('purchasing.newPoDescription') }}</p>
             </div>
 
+            <!-- Validation error summary — surfaces all errors, including nested item rows -->
+            <div v-if="Object.keys(form.errors).length" class="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                <p class="font-semibold mb-1">{{ t('common.pleaseFixErrors') }}</p>
+                <ul class="list-disc ms-5 space-y-0.5">
+                    <li v-for="(msg, key) in form.errors" :key="key">{{ msg }}</li>
+                </ul>
+            </div>
+
             <form @submit.prevent="submit" class="grid grid-cols-1 gap-6 lg:grid-cols-3">
 
                 <div class="lg:col-span-1 flex flex-col gap-4">

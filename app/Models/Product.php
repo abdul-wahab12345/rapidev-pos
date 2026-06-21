@@ -31,15 +31,23 @@ class Product extends TenantAware
     ];
 
     /**
-     * Auto-compute sq_m_per_box from tile dimensions (inches) when saving.
-     * 1 inch = 0.0254 m  →  sq_m = (w_in × 0.0254) × (h_in × 0.0254) × tiles_per_box
+     * sq_m_per_box is the source of truth for all tile area math and is entered
+     * directly (read off the supplier's box — e.g. 1.44 m²). Inch dimensions are
+     * NOMINAL/marketing sizes (24×48" ≈ 60×120 cm) used for labels only, so they
+     * are NOT reliable for area: 24" = 60.96 cm, not 60 cm.
+     *
+     * Fallback only: if sq_m_per_box was left blank but inch dims exist, estimate
+     * it from inches so legacy/quick entries still get a value.
      */
     protected static function booted(): void
     {
         parent::booted(); // ← must call this first so TenantAware sets UUID + tenant_id
 
         static::saving(function (Product $product) {
-            if ($product->tile_width_in && $product->tile_height_in && $product->tiles_per_box) {
+            if (
+                empty($product->sq_m_per_box)
+                && $product->tile_width_in && $product->tile_height_in && $product->tiles_per_box
+            ) {
                 $product->sq_m_per_box = round(
                     ($product->tile_width_in * 0.0254) * ($product->tile_height_in * 0.0254) * $product->tiles_per_box,
                     4
