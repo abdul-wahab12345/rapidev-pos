@@ -115,7 +115,7 @@ class SalesController extends Controller
     public function show(Sale $sale): Response
     {
         $sale->load([
-            'items.product:id,tiles_per_box,sq_m_per_box,material_type',
+            'items.product:id,unit,tile_width_in,tile_height_in,tiles_per_box,sq_m_per_box,material_type',
             'customer:id,name,phone,address',
             'cashier:id,name',
             'branch:id,name',
@@ -165,6 +165,9 @@ class SalesController extends Controller
                     'discount'           => (float) $i->discount,
                     'line_total'         => (float) $i->line_total,
                     'quantity_returnable' => $i->quantity - ($returnedQty[$i->id] ?? 0),
+                    'unit'               => $i->product?->unit,
+                    'tile_width_in'      => $i->product?->tile_width_in ? (float) $i->product->tile_width_in : null,
+                    'tile_height_in'     => $i->product?->tile_height_in ? (float) $i->product->tile_height_in : null,
                     'tiles_per_box'      => $i->product?->tiles_per_box,
                     'sq_m_per_box'       => $i->product ? (float) ($i->product->sq_m_per_box ?? 0) : null,
                     'material_type'      => $i->product?->material_type,

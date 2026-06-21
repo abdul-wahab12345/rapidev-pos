@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import type { BreadcrumbItem } from '@/types';
 import { useConfirm } from '@/composables/useConfirm';
 import { useReceipt } from '@/composables/useReceipt';
-import { formatMoney, formatDateTime } from '@/utils/format';
+import { formatMoney, formatDateTime, formatUnit, formatQty } from '@/utils/format';
 import { paymentBadge, statusBadge } from '@/constants/badges';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import { AlertTriangle, ArrowLeft, ArrowUpLeft, Eye, Layers, Printer, RotateCcw } from 'lucide-vue-next';
@@ -27,6 +27,9 @@ interface SaleItem {
     discount: number;
     line_total: number;
     quantity_returnable: number;
+    unit: string | null;
+    tile_width_in: number | null;
+    tile_height_in: number | null;
     tiles_per_box: number | null;
     sq_m_per_box: number | null;
     material_type: string | null;
@@ -80,6 +83,12 @@ const returnLooseTiles = reactive<Record<string, number | ''>>({});
 function isTileProduct(item: SaleItem): boolean {
     return !!(item.tiles_per_box && item.tiles_per_box > 0 &&
               ['tile','ceramic','mosaic','border'].includes(item.material_type ?? ''));
+}
+
+// Nominal tile size label e.g. "12 × 24 in" (for display only)
+function tileSizeLabel(item: SaleItem): string | null {
+    if (!item.tile_width_in || !item.tile_height_in) return null;
+    return `${item.tile_width_in} × ${item.tile_height_in} in`;
 }
 
 // Returns m² to return based on entered boxes + loose tiles
@@ -296,9 +305,12 @@ async function printReceipt() {
                                     <td class="px-4 py-3">
                                         <p class="font-medium text-foreground">{{ item.product_name }}</p>
                                         <p v-if="item.variant_label" class="text-xs text-muted-foreground">{{ item.variant_label }}</p>
+                                        <p v-if="tileSizeLabel(item)" class="text-xs text-muted-foreground">{{ tileSizeLabel(item) }}</p>
                                         <p v-if="item.discount > 0" class="text-xs text-green-600 dark:text-green-400">{{ t('sales.discountLine', { amount: fmt(item.discount) }) }}</p>
                                     </td>
-                                    <td class="px-4 py-3 text-center text-muted-foreground">{{ item.quantity }}</td>
+                                    <td class="px-4 py-3 text-center text-muted-foreground">
+                                        {{ formatQty(item.quantity, item.unit) }}<span v-if="item.unit" class="text-xs"> {{ formatUnit(item.unit) }}</span>
+                                    </td>
                                     <td class="px-4 py-3 text-end text-muted-foreground">{{ fmt(item.unit_price) }}</td>
                                     <td class="px-4 py-3 text-end font-semibold text-foreground">{{ fmt(item.line_total) }}</td>
                                 </tr>
