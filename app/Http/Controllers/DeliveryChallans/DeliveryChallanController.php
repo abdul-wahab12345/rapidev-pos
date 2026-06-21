@@ -78,7 +78,7 @@ class DeliveryChallanController extends Controller
                 ];
             }
         } elseif ($saleId) {
-            $s = Sale::with(['customer', 'items'])->find($saleId);
+            $s = Sale::with(['customer', 'items.product:id,unit'])->find($saleId);
             if ($s) {
                 $prefill = [
                     'source'      => 'sale',
@@ -87,7 +87,7 @@ class DeliveryChallanController extends Controller
                     'items'       => $s->items->map(fn ($i) => [
                         'product_id'   => $i->product_id,
                         'product_name' => $i->product_name,
-                        'product_unit' => 'piece',
+                        'product_unit' => $i->product?->unit ?? 'piece',
                         'quantity'     => $i->quantity,
                     ])->toArray(),
                 ];
@@ -202,11 +202,16 @@ class DeliveryChallanController extends Controller
                     'id'           => $item->id,
                     'product_id'   => $item->product_id,
                     'product_name' => $item->product_name,
-                    'product_unit' => $item->product_unit,
+                    // Prefer the product's live unit; fall back to the stored snapshot
+                    'product_unit' => $item->product?->unit ?? $item->product_unit,
                     'lot_number'   => $item->lot_number,
                     'quantity'     => (float) $item->quantity,
                     'notes'        => $item->notes,
-                    'material_type'=> $item->product?->material_type,
+                    'material_type'  => $item->product?->material_type,
+                    'tile_width_in'  => $item->product?->tile_width_in ? (float) $item->product->tile_width_in : null,
+                    'tile_height_in' => $item->product?->tile_height_in ? (float) $item->product->tile_height_in : null,
+                    'tiles_per_box'  => $item->product?->tiles_per_box,
+                    'sq_m_per_box'   => $item->product?->sq_m_per_box ? (float) $item->product->sq_m_per_box : null,
                 ]),
             ],
         ]);

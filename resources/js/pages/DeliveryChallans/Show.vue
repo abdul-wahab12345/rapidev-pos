@@ -1,13 +1,35 @@
 <script setup lang="ts">
 import AppLayout from '@/layouts/AppLayout.vue';
 import { useConfirm } from '@/composables/useConfirm';
-import { formatUnit } from '@/utils/format';
+import { formatUnit, formatQty } from '@/utils/format';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { Layers, Printer, Trash2, Truck } from 'lucide-vue-next';
 
 interface ChallanItem {
     id: string; product_id: string | null; product_name: string; product_unit: string;
     lot_number: string | null; quantity: number; notes: string | null; material_type: string | null;
+    tile_width_in: number | null; tile_height_in: number | null;
+    tiles_per_box: number | null; sq_m_per_box: number | null;
+}
+
+const TILE_TYPES = ['tile', 'ceramic', 'mosaic', 'border'];
+
+function tileSizeLabel(item: ChallanItem): string | null {
+    if (!item.tile_width_in || !item.tile_height_in) return null;
+    return `${item.tile_width_in} × ${item.tile_height_in} in`;
+}
+
+// Box + loose-tile breakdown from the m² quantity — so the driver knows what to load
+function tileBreakdown(item: ChallanItem): string | null {
+    if (!item.tiles_per_box || !item.sq_m_per_box) return null;
+    if (!TILE_TYPES.includes(item.material_type ?? '')) return null;
+    const sqmPerTile = item.sq_m_per_box / item.tiles_per_box;
+    if (!sqmPerTile) return null;
+    const totalTiles = Math.round(item.quantity / sqmPerTile);
+    const boxes = Math.floor(totalTiles / item.tiles_per_box);
+    const loose = totalTiles % item.tiles_per_box;
+    if (boxes === 0 && loose === 0) return null;
+    return loose > 0 ? `${boxes} box + ${loose} tile` : `${boxes} box`;
 }
 interface Challan {
     id: string; challan_number: string; status: string;
@@ -53,11 +75,15 @@ function printChallan() {
             <td class="num">${i + 1}</td>
             <td>
                 <strong>${item.product_name}</strong>
+                ${tileSizeLabel(item) ? `<br><span style="font-size:11px;color:#666">${tileSizeLabel(item)}</span>` : ''}
                 ${item.material_type ? `<br><span style="font-size:11px;color:#666;text-transform:capitalize">${item.material_type}</span>` : ''}
                 ${item.notes ? `<br><span style="font-size:11px;color:#888;font-style:italic">${item.notes}</span>` : ''}
             </td>
             <td class="mono">${item.lot_number ?? '—'}</td>
-            <td class="r fw">${item.quantity}</td>
+            <td class="r fw">
+                ${formatQty(item.quantity, item.product_unit)}
+                ${tileBreakdown(item) ? `<br><span style="font-size:12px;font-weight:700;color:#065f46">${tileBreakdown(item)}</span>` : ''}
+            </td>
             <td>${formatUnit(item.product_unit)}</td>
         </tr>`).join('');
 
@@ -263,11 +289,15 @@ ${c.notes ? `<div style="border:1px solid #ddd;border-radius:4px;padding:6px 10p
                             <td class="px-4 py-3 text-muted-foreground">{{ i + 1 }}</td>
                             <td class="px-4 py-3">
                                 <p class="font-medium">{{ item.product_name }}</p>
+                                <p v-if="tileSizeLabel(item)" class="text-xs text-muted-foreground">{{ tileSizeLabel(item) }}</p>
                                 <p v-if="item.material_type" class="text-xs text-muted-foreground capitalize">{{ item.material_type }}</p>
                                 <p v-if="item.notes" class="text-xs text-muted-foreground italic mt-0.5">{{ item.notes }}</p>
                             </td>
                             <td class="px-4 py-3 font-mono text-sm text-muted-foreground">{{ item.lot_number ?? '—' }}</td>
-                            <td class="px-4 py-3 text-end tabular-nums font-medium">{{ item.quantity }}</td>
+                            <td class="px-4 py-3 text-end tabular-nums font-medium">
+                                {{ formatQty(item.quantity, item.product_unit) }}
+                                <div v-if="tileBreakdown(item)" class="text-xs font-bold text-emerald-600 dark:text-emerald-400">{{ tileBreakdown(item) }}</div>
+                            </td>
                             <td class="px-4 py-3 text-muted-foreground">{{ formatUnit(item.product_unit) }}</td>
                         </tr>
                     </tbody>

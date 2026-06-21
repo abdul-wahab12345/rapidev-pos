@@ -24,6 +24,8 @@ interface OrderItem {
     unit_cost: number;
     line_total: number;
     unit: string | null;
+    tile_width_in: number | null;
+    tile_height_in: number | null;
     tiles_per_box: number | null;
     sq_m_per_box: number | null;
     material_type: string | null;
@@ -123,6 +125,11 @@ function isTileItem(i: number): boolean {
     const item = props.order.items[i];
     return !!(item?.tiles_per_box && item.tiles_per_box > 0 &&
               ['tile', 'ceramic', 'mosaic', 'border'].includes(item.material_type ?? ''));
+}
+
+function tileSizeLabel(item: OrderItem): string | null {
+    if (!item.tile_width_in || !item.tile_height_in) return null;
+    return `${item.tile_width_in} × ${item.tile_height_in} in`;
 }
 function submitReceive() {
     receiveForm.post(route('purchasing.orders.receive', props.order.id), {
@@ -363,6 +370,7 @@ const subtitleLine = computed(() => {
                             <div class="flex-1">
                                 <div class="font-medium">{{ item.product_name }}</div>
                                 <div v-if="item.variant_label" class="text-muted-foreground text-xs">{{ item.variant_label }}</div>
+                                <div v-if="tileSizeLabel(item)" class="text-muted-foreground text-xs">{{ tileSizeLabel(item) }}</div>
                                 <div v-if="item.unit" class="text-muted-foreground text-xs">{{ formatUnit(item.unit) }}</div>
                             </div>
                             <div class="w-20 text-center">

@@ -297,6 +297,8 @@ class PurchaseOrderController extends Controller
                     'unit_cost' => (float) $i->unit_cost,
                     'line_total' => (float) $i->line_total,
                     'unit'          => $i->product?->unit,
+                    'tile_width_in'  => $i->product?->tile_width_in ? (float) $i->product->tile_width_in : null,
+                    'tile_height_in' => $i->product?->tile_height_in ? (float) $i->product->tile_height_in : null,
                     'tiles_per_box' => $i->product?->tiles_per_box,
                     'sq_m_per_box'  => $i->product?->sq_m_per_box ? (float) $i->product->sq_m_per_box : null,
                     'material_type' => $i->product?->material_type,
