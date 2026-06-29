@@ -28,6 +28,7 @@ class DefaultChartOfAccounts
         ['code' => '3010', 'name' => "Owner's Capital",        'type' => 'equity',    'sub_type' => 'equity',         'is_system' => true],
         ['code' => '3020', 'name' => "Owner's Drawings",       'type' => 'equity',    'sub_type' => 'equity',         'is_system' => false],
         ['code' => '3030', 'name' => 'Retained Earnings',      'type' => 'equity',    'sub_type' => 'equity',         'is_system' => true],
+        ['code' => '3040', 'name' => 'Opening Balance Equity', 'type' => 'equity',    'sub_type' => 'equity',         'is_system' => true],
 
         // ── Income ─────────────────────────────────────────────────────
         ['code' => '4010', 'name' => 'Sales Revenue',          'type' => 'income',    'sub_type' => 'revenue',        'is_system' => true],
@@ -45,6 +46,7 @@ class DefaultChartOfAccounts
         ['code' => '5080', 'name' => 'Marketing & Advertising','type' => 'expense',   'sub_type' => 'operating_expense', 'is_system' => false],
         ['code' => '5090', 'name' => 'Miscellaneous Expense',  'type' => 'expense',   'sub_type' => 'other_expense',  'is_system' => false],
         ['code' => '5100', 'name' => 'Bank Charges',           'type' => 'expense',   'sub_type' => 'other_expense',  'is_system' => false],
+        ['code' => '5110', 'name' => 'Bad Debts Written Off',  'type' => 'expense',   'sub_type' => 'other_expense',  'is_system' => true],
     ];
 
     public static function seedForTenant(string $tenantId): void

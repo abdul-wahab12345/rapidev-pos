@@ -152,6 +152,7 @@ class CustomersController extends Controller
             'notes' => 'nullable|string|max:1000',
             'credit_limit' => 'nullable|numeric|min:0',
             'discount_percent' => 'nullable|numeric|min:0|max:100',
+            'opening_balance' => 'nullable|numeric|min:0',
             'city_id' => 'nullable|integer|exists:cities,id',
             'area_id' => 'nullable|integer|exists:areas,id',
         ]);
@@ -167,7 +168,9 @@ class CustomersController extends Controller
             ? City::find($validated['city_id'])?->name
             : null;
 
-        DB::transaction(function () use ($validated, $tenantId, $partyCityLabel) {
+        $opening = (int) round((float) ($validated['opening_balance'] ?? 0));
+
+        $customer = DB::transaction(function () use ($validated, $tenantId, $partyCityLabel, $opening) {
             $party = Party::create([
                 'tenant_id' => $tenantId,
                 'name' => $validated['name'],
@@ -180,7 +183,7 @@ class CustomersController extends Controller
                 'is_supplier' => false,
             ]);
 
-            Customer::create([
+            $customer = Customer::create([
                 'party_id' => $party->id,
                 'name' => $validated['name'],
                 'phone' => $validated['phone'] ?? null,
@@ -191,10 +194,34 @@ class CustomersController extends Controller
                 'area_id' => $validated['area_id'] ?? null,
                 'credit_limit' => isset($validated['credit_limit']) ? (float) $validated['credit_limit'] : 0,
                 'discount_percent' => isset($validated['discount_percent']) ? (float) $validated['discount_percent'] : 0,
-                'current_balance' => 0,
+                'current_balance' => $opening,
                 'total_spend' => 0,
             ]);
+
+            // Record the opening udhaar as a ledger entry for audit trail
+            if ($opening > 0) {
+                CustomerLedgerEntry::create([
+                    'tenant_id' => $tenantId,
+                    'customer_id' => $customer->id,
+                    'sale_id' => null,
+                    'type' => 'opening',
+                    'amount' => $opening,
+                    'running_balance' => $opening,
+                    'description' => 'Opening udhaar balance',
+                ]);
+            }
+
+            return $customer;
         });
+
+        // Post opening balance to the GL (Dr Receivable, Cr Opening Balance Equity)
+        if ($opening > 0) {
+            try {
+                AccountingService::postCustomerOpeningBalance($tenantId, auth()->id(), $opening, $customer->id, $customer->name);
+            } catch (\Throwable $e) {
+                \Log::warning('postCustomerOpeningBalance failed: '.$e->getMessage());
+            }
+        }
 
         return redirect()->route('customers.index')->with('success', 'Customer added successfully.');
     }
@@ -325,6 +352,81 @@ class CustomersController extends Controller
         }
 
         return back()->with('success', 'Payment of Rs '.number_format($amount).' recorded.');
+    }
+
+    // Add a manual charge that increases a customer's udhaar (debit note) — e.g. an old
+    // unbilled amount, a service charge. Posts Dr Receivable / Cr Other Income.
+    public function addCharge(Request $request, Customer $customer): RedirectResponse
+    {
+        $validated = $request->validate([
+            'amount' => 'required|numeric|min:1',
+            'reason' => 'nullable|string|max:500',
+        ]);
+
+        $amount     = (int) round((float) $validated['amount']);
+        $newBalance = (int) round((float) $customer->current_balance) + $amount;
+
+        DB::transaction(function () use ($customer, $amount, $newBalance, $validated) {
+            DB::table('customers')->where('id', $customer->id)->update(['current_balance' => $newBalance]);
+
+            CustomerLedgerEntry::create([
+                'tenant_id'       => $customer->tenant_id,
+                'customer_id'     => $customer->id,
+                'sale_id'         => null,
+                'type'            => 'charge',
+                'amount'          => $amount,
+                'running_balance' => $newBalance,
+                'description'     => 'Charge added'.(!empty($validated['reason']) ? ': '.$validated['reason'] : ''),
+            ]);
+        });
+
+        try {
+            AccountingService::postCustomerCharge($customer->tenant_id, auth()->id(), $amount, $customer->id, $validated['reason'] ?? '');
+        } catch (\Throwable $e) {
+            \Log::warning('postCustomerCharge failed: '.$e->getMessage());
+        }
+
+        return back()->with('success', 'Charge of Rs '.number_format($amount).' added.');
+    }
+
+    // Write off part/all of a customer's udhaar as bad debt (credit note).
+    // Posts Dr Bad Debts Written Off / Cr Receivable.
+    public function writeOff(Request $request, Customer $customer): RedirectResponse
+    {
+        $validated = $request->validate([
+            'amount' => 'required|numeric|min:1',
+            'reason' => 'nullable|string|max:500',
+        ]);
+
+        $amount = (int) round((float) $validated['amount']);
+
+        if ($amount > (int) round((float) $customer->current_balance)) {
+            return back()->with('error', 'Write-off exceeds the outstanding balance.');
+        }
+
+        $newBalance = (int) round((float) $customer->current_balance) - $amount;
+
+        DB::transaction(function () use ($customer, $amount, $newBalance, $validated) {
+            DB::table('customers')->where('id', $customer->id)->update(['current_balance' => $newBalance]);
+
+            CustomerLedgerEntry::create([
+                'tenant_id'       => $customer->tenant_id,
+                'customer_id'     => $customer->id,
+                'sale_id'         => null,
+                'type'            => 'writeoff',
+                'amount'          => -$amount,
+                'running_balance' => $newBalance,
+                'description'     => 'Bad debt written off'.(!empty($validated['reason']) ? ': '.$validated['reason'] : ''),
+            ]);
+        });
+
+        try {
+            AccountingService::postCustomerWriteOff($customer->tenant_id, auth()->id(), $amount, $customer->id, $validated['reason'] ?? '');
+        } catch (\Throwable $e) {
+            \Log::warning('postCustomerWriteOff failed: '.$e->getMessage());
+        }
+
+        return back()->with('success', 'Rs '.number_format($amount).' written off.');
     }
 
     // Void a previously recorded customer payment

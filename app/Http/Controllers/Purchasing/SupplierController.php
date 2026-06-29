@@ -7,6 +7,7 @@ use App\Http\Controllers\Locations\LocationsController;
 use App\Models\City;
 use App\Models\Party;
 use App\Models\Supplier;
+use App\Services\AccountingService;
 use App\Services\SupplierService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -154,6 +155,18 @@ class SupplierController extends Controller
             ]);
         });
 
+        // Post opening payable to the GL (Dr Opening Balance Equity, Cr Accounts Payable)
+        if ((float) ($validated['opening_balance'] ?? 0) > 0) {
+            try {
+                AccountingService::postSupplierOpeningBalance(
+                    (string) $tenant->id, auth()->id(),
+                    (float) $validated['opening_balance'], $supplier->id, $supplier->name
+                );
+            } catch (\Throwable $e) {
+                \Log::warning('postSupplierOpeningBalance failed: '.$e->getMessage());
+            }
+        }
+
         return back()->with('success', "Supplier {$supplier->name} added.");
     }
 
@@ -224,4 +237,5 @@ class SupplierController extends Controller
 
         return back()->with('success', 'Supplier removed.');
     }
+
 }

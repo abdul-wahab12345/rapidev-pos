@@ -59,4 +59,7 @@ export const ledgerTypeBadge: Record<string, { labelKey: string; class: string }
     payment_void:   { labelKey: 'badges.pmtVoided',    class: 'bg-muted text-muted-foreground line-through' },
     payment_voided: { labelKey: 'badges.voided',       class: 'bg-muted text-muted-foreground opacity-60' },
     void:           { labelKey: 'badges.void',         class: 'bg-muted text-muted-foreground' },
+    opening:        { labelKey: 'badges.opening',      class: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
+    charge:         { labelKey: 'badges.charge',       class: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400' },
+    writeoff:       { labelKey: 'badges.writeoff',     class: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' },
 };

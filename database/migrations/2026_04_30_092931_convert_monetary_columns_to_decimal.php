@@ -7,6 +7,12 @@ return new class extends Migration
 {
     public function up(): void
     {
+        // Uses MySQL-only `MODIFY COLUMN` raw SQL. Skip on other drivers (e.g. the
+        // SQLite test database, which is dynamically typed and needs no conversion).
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
+
         // Convert all monetary columns from bigInteger paisa to decimal(12,2) PKR.
         // MySQL: MODIFY COLUMN changes the type first (bigint → decimal), then UPDATE scales the values.
 
@@ -70,6 +76,10 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (DB::getDriverName() !== 'mysql') {
+            return;
+        }
+
         // Reverse: scale back by 100 then change type back to BIGINT.
 
         DB::statement('UPDATE products SET cost_price = ROUND(cost_price * 100), selling_price = ROUND(selling_price * 100)');

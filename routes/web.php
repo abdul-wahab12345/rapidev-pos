@@ -55,6 +55,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::put('/{customer}', [CustomersController::class, 'update'])->name('update');
         Route::delete('/{customer}', [CustomersController::class, 'destroy'])->name('destroy');
         Route::post('/{customer}/payment', [CustomersController::class, 'recordPayment'])->name('payment');
+        Route::post('/{customer}/charge', [CustomersController::class, 'addCharge'])->name('charge');
+        Route::post('/{customer}/write-off', [CustomersController::class, 'writeOff'])->name('write-off');
         Route::post('/{customer}/payment/{entry}/void', [CustomersController::class, 'voidPayment'])->name('payment.void');
         Route::post('/{customer}/enable-supplier', [CustomersController::class, 'enableSupplier'])->name('enable-supplier');
         Route::post('/{customer}/disable-supplier', [CustomersController::class, 'disableSupplier'])->name('disable-supplier');

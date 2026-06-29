@@ -11,10 +11,16 @@ use Illuminate\Support\Facades\DB;
 class AccountingService
 {
     // Standard system account codes
-    const CASH       = '1010';
-    const BANK       = '1020';
-    const RECEIVABLE = '1030';
-    const REVENUE    = '4010';
+    const CASH        = '1010';
+    const BANK        = '1020';
+    const RECEIVABLE  = '1030';
+    const INVENTORY   = '1040';
+    const PAYABLE     = '2010';
+    const OPENING_EQ  = '3040';  // Opening Balance Equity
+    const REVENUE     = '4010';
+    const OTHER_INCOME = '4020';
+    const COGS        = '5010';  // Cost of Goods Sold
+    const BAD_DEBT    = '5110';  // Bad Debts Written Off
 
     /**
      * Auto-post a journal entry when a sale is completed.
@@ -22,7 +28,7 @@ class AccountingService
     public static function postSale(Sale $sale): void
     {
         $tenantId = $sale->tenant_id;
-        $accounts = self::loadAccounts($tenantId, [self::CASH, self::BANK, self::RECEIVABLE, self::REVENUE]);
+        $accounts = self::loadAccounts($tenantId, [self::CASH, self::BANK, self::RECEIVABLE, self::REVENUE, self::COGS, self::INVENTORY]);
 
         // Skip silently if the chart of accounts hasn't been set up yet
         if (!isset($accounts[self::REVENUE])) return;
@@ -63,6 +69,16 @@ class AccountingService
 
         // Credit side — Sales Revenue
         $lines[] = ['account_id' => $accounts[self::REVENUE], 'debit' => 0, 'credit' => $total, 'description' => "Sale {$sale->invoice_number}"];
+
+        // Cost of goods sold — Dr COGS (5010), Cr Inventory (1040) for the cost of items sold.
+        // Keeps the same journal entry balanced (debits/credits both rise by COGS) and lets
+        // reverseSale() undo it automatically on void.
+        $sale->loadMissing('items');
+        $cogs = (float) $sale->items->sum(fn ($i) => (float) $i->cost_price * (float) $i->quantity);
+        if ($cogs > 0 && isset($accounts[self::COGS]) && isset($accounts[self::INVENTORY])) {
+            $lines[] = ['account_id' => $accounts[self::COGS],      'debit' => $cogs, 'credit' => 0,    'description' => "COGS – {$sale->invoice_number}"];
+            $lines[] = ['account_id' => $accounts[self::INVENTORY], 'debit' => 0,    'credit' => $cogs, 'description' => "Inventory sold – {$sale->invoice_number}"];
+        }
 
         if (empty($lines)) return;
 
@@ -205,7 +221,7 @@ class AccountingService
     public static function postReturn(\App\Models\SaleReturn $return): void
     {
         $tenantId = $return->tenant_id;
-        $accounts = self::loadAccounts($tenantId, [self::CASH, self::BANK, self::RECEIVABLE, self::REVENUE]);
+        $accounts = self::loadAccounts($tenantId, [self::CASH, self::BANK, self::RECEIVABLE, self::REVENUE, self::COGS, self::INVENTORY]);
 
         if (!isset($accounts[self::REVENUE])) return;
 
@@ -222,15 +238,28 @@ class AccountingService
 
         $saleInvoice = $return->sale?->invoice_number ?? $return->sale_id;
 
+        $lines = [
+            ['account_id' => $accounts[self::REVENUE], 'debit' => $amount, 'credit' => 0,      'description' => "Revenue reversed – {$return->return_number}"],
+            ['account_id' => $creditAccountId,         'debit' => 0,       'credit' => $amount, 'description' => ucfirst(str_replace('_', ' ', $return->refund_method)) . ' refund'],
+        ];
+
+        // Reverse COGS only for restocked items — goods physically back in inventory.
+        // Dr Inventory (1040), Cr COGS (5010). Damaged (non-restock) returns keep the cost as a loss.
+        $return->loadMissing('items.saleItem');
+        $returnedCogs = (float) $return->items
+            ->where('restock', true)
+            ->sum(fn ($ri) => (float) ($ri->saleItem?->cost_price ?? 0) * (float) $ri->quantity_returned);
+        if ($returnedCogs > 0 && isset($accounts[self::COGS]) && isset($accounts[self::INVENTORY])) {
+            $lines[] = ['account_id' => $accounts[self::INVENTORY], 'debit' => $returnedCogs, 'credit' => 0,            'description' => "Inventory restocked – {$return->return_number}"];
+            $lines[] = ['account_id' => $accounts[self::COGS],      'debit' => 0,             'credit' => $returnedCogs, 'description' => "COGS reversed – {$return->return_number}"];
+        }
+
         self::createEntry($tenantId, $return->created_by, [
             'entry_date'     => $return->return_date->format('Y-m-d'),
             'description'    => "Return {$return->return_number} – {$saleInvoice}",
             'reference_type' => 'return',
             'reference_id'   => $return->id,
-            'lines'          => [
-                ['account_id' => $accounts[self::REVENUE], 'debit' => $amount, 'credit' => 0,      'description' => "Revenue reversed – {$return->return_number}"],
-                ['account_id' => $creditAccountId,         'debit' => 0,       'credit' => $amount, 'description' => ucfirst(str_replace('_', ' ', $return->refund_method)) . ' refund'],
-            ],
+            'lines'          => $lines,
         ]);
     }
 
@@ -405,6 +434,98 @@ class AccountingService
 
     // ── Private helpers ───────────────────────────────────────────────
 
+    /**
+     * Post a customer's opening udhaar balance.
+     * Dr Accounts Receivable (1030), Cr Opening Balance Equity (3040).
+     */
+    public static function postCustomerOpeningBalance(string $tenantId, int $userId, float $amount, string $customerId, string $name = ''): void
+    {
+        if ($amount <= 0) return;
+        $ar  = self::ensureAccount($tenantId, self::RECEIVABLE);
+        $eq  = self::ensureAccount($tenantId, self::OPENING_EQ);
+        if (!$ar || !$eq) return;
+
+        self::createEntry($tenantId, $userId, [
+            'entry_date'     => now()->format('Y-m-d'),
+            'description'    => 'Opening udhaar balance' . ($name ? " – {$name}" : ''),
+            'reference_type' => 'customer_opening',
+            'reference_id'   => $customerId,
+            'lines'          => [
+                ['account_id' => $ar, 'debit' => $amount, 'credit' => 0,      'description' => 'Opening receivable'],
+                ['account_id' => $eq, 'debit' => 0,      'credit' => $amount, 'description' => 'Opening balance equity'],
+            ],
+        ]);
+    }
+
+    /**
+     * Post a supplier's opening payable balance.
+     * Dr Opening Balance Equity (3040), Cr Accounts Payable (2010).
+     */
+    public static function postSupplierOpeningBalance(string $tenantId, int $userId, float $amount, string $supplierId, string $name = ''): void
+    {
+        if ($amount <= 0) return;
+        $ap = self::ensureAccount($tenantId, self::PAYABLE);
+        $eq = self::ensureAccount($tenantId, self::OPENING_EQ);
+        if (!$ap || !$eq) return;
+
+        self::createEntry($tenantId, $userId, [
+            'entry_date'     => now()->format('Y-m-d'),
+            'description'    => 'Opening payable balance' . ($name ? " – {$name}" : ''),
+            'reference_type' => 'supplier_opening',
+            'reference_id'   => $supplierId,
+            'lines'          => [
+                ['account_id' => $eq, 'debit' => $amount, 'credit' => 0,      'description' => 'Opening balance equity'],
+                ['account_id' => $ap, 'debit' => 0,      'credit' => $amount, 'description' => 'Opening payable'],
+            ],
+        ]);
+    }
+
+    /**
+     * Post a manual charge that increases a customer's udhaar (debit note).
+     * Dr Accounts Receivable (1030), Cr Other Income (4020).
+     */
+    public static function postCustomerCharge(string $tenantId, int $userId, float $amount, string $customerId, string $desc = ''): void
+    {
+        if ($amount <= 0) return;
+        $ar  = self::ensureAccount($tenantId, self::RECEIVABLE);
+        $inc = self::ensureAccount($tenantId, self::OTHER_INCOME);
+        if (!$ar || !$inc) return;
+
+        self::createEntry($tenantId, $userId, [
+            'entry_date'     => now()->format('Y-m-d'),
+            'description'    => 'Customer charge' . ($desc ? " – {$desc}" : ''),
+            'reference_type' => 'customer_charge',
+            'reference_id'   => $customerId,
+            'lines'          => [
+                ['account_id' => $ar,  'debit' => $amount, 'credit' => 0,      'description' => 'Charge to customer'],
+                ['account_id' => $inc, 'debit' => 0,      'credit' => $amount, 'description' => 'Other income'],
+            ],
+        ]);
+    }
+
+    /**
+     * Write off a customer's bad debt (credit note that reduces udhaar).
+     * Dr Bad Debts Written Off (5110), Cr Accounts Receivable (1030).
+     */
+    public static function postCustomerWriteOff(string $tenantId, int $userId, float $amount, string $customerId, string $desc = ''): void
+    {
+        if ($amount <= 0) return;
+        $ar = self::ensureAccount($tenantId, self::RECEIVABLE);
+        $bd = self::ensureAccount($tenantId, self::BAD_DEBT);
+        if (!$ar || !$bd) return;
+
+        self::createEntry($tenantId, $userId, [
+            'entry_date'     => now()->format('Y-m-d'),
+            'description'    => 'Bad debt written off' . ($desc ? " – {$desc}" : ''),
+            'reference_type' => 'customer_writeoff',
+            'reference_id'   => $customerId,
+            'lines'          => [
+                ['account_id' => $bd, 'debit' => $amount, 'credit' => 0,      'description' => 'Bad debt expense'],
+                ['account_id' => $ar, 'debit' => 0,      'credit' => $amount, 'description' => 'Receivable written off'],
+            ],
+        ]);
+    }
+
     private static function loadAccounts(string $tenantId, array $codes): array
     {
         return Account::where('tenant_id', $tenantId)
@@ -412,6 +533,42 @@ class AccountingService
             ->where('is_active', true)
             ->pluck('id', 'code')
             ->toArray();
+    }
+
+    /**
+     * Return the account id for a code, lazily creating it if the tenant's chart
+     * predates the account (e.g. Opening Balance Equity / Bad Debts added later).
+     * Returns null only if the tenant has no chart of accounts at all.
+     */
+    private static function ensureAccount(string $tenantId, string $code): ?string
+    {
+        $account = Account::where('tenant_id', $tenantId)->where('code', $code)->first();
+        if ($account) {
+            return $account->is_active ? $account->id : null;
+        }
+
+        // Don't conjure a chart for tenants that never set one up
+        if (! Account::where('tenant_id', $tenantId)->exists()) {
+            return null;
+        }
+
+        $defaults = [
+            self::OPENING_EQ => ['name' => 'Opening Balance Equity', 'type' => 'equity',  'sub_type' => 'equity'],
+            self::BAD_DEBT   => ['name' => 'Bad Debts Written Off',  'type' => 'expense', 'sub_type' => 'other_expense'],
+            self::OTHER_INCOME => ['name' => 'Other Income',         'type' => 'income',  'sub_type' => 'revenue'],
+        ];
+        $def = $defaults[$code] ?? null;
+        if (! $def) return null;
+
+        return Account::create([
+            'tenant_id' => $tenantId,
+            'code'      => $code,
+            'name'      => $def['name'],
+            'type'      => $def['type'],
+            'sub_type'  => $def['sub_type'],
+            'is_system' => true,
+            'is_active' => true,
+        ])->id;
     }
 
     private static function createEntry(string $tenantId, int $userId, array $data): void

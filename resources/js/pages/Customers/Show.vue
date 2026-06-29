@@ -7,7 +7,7 @@ import type { BreadcrumbItem } from '@/types';
 import { Head, Link, router, useForm } from '@inertiajs/vue3';
 import {
     ArrowLeft, BookOpen, Building2, CreditCard, Edit, MapPin, Phone,
-    ShoppingBag, Trash2, Undo2, Wallet,
+    ShoppingBag, SlidersHorizontal, Trash2, Undo2, Wallet,
 } from 'lucide-vue-next';
 import { computed, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
@@ -93,6 +93,38 @@ function submitPayment() {
             showPaymentModal.value = false;
             paymentForm.reset();
         },
+    });
+}
+
+// ── Add charge modal (increase udhaar) ────────────────────────
+const showChargeModal = ref(false);
+const chargeForm = useForm({ amount: '', reason: '' });
+
+function openChargeModal() {
+    chargeForm.reset();
+    chargeForm.clearErrors();
+    showChargeModal.value = true;
+}
+function submitCharge() {
+    chargeForm.post(route('customers.charge', props.customer.id), {
+        preserveScroll: true,
+        onSuccess: () => { showChargeModal.value = false; chargeForm.reset(); },
+    });
+}
+
+// ── Write-off modal (reduce udhaar as bad debt) ───────────────
+const showWriteOffModal = ref(false);
+const writeOffForm = useForm({ amount: '', reason: '' });
+
+function openWriteOffModal() {
+    writeOffForm.reset();
+    writeOffForm.clearErrors();
+    showWriteOffModal.value = true;
+}
+function submitWriteOff() {
+    writeOffForm.post(route('customers.write-off', props.customer.id), {
+        preserveScroll: true,
+        onSuccess: () => { showWriteOffModal.value = false; writeOffForm.reset(); },
     });
 }
 
@@ -187,6 +219,23 @@ const typeLabel = ledgerTypeBadge;
                     >
                         <Wallet class="h-4 w-4" />
                         {{ t('customers.recordPayment') }}
+                    </button>
+                    <!-- Add Charge -->
+                    <button
+                        @click="openChargeModal"
+                        class="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-accent transition-colors"
+                    >
+                        <SlidersHorizontal class="h-4 w-4" />
+                        {{ t('customers.addCharge') }}
+                    </button>
+                    <!-- Write Off -->
+                    <button
+                        v-if="customer.current_balance > 0"
+                        @click="openWriteOffModal"
+                        class="flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-accent transition-colors"
+                    >
+                        <Undo2 class="h-4 w-4" />
+                        {{ t('customers.writeOff') }}
                     </button>
                     <Link
                         :href="route('customers.edit', customer.id)"
@@ -462,6 +511,89 @@ const typeLabel = ledgerTypeBadge;
                             class="flex-1 rounded-xl bg-green-600 py-2.5 text-sm font-bold text-white hover:bg-green-500 transition-colors disabled:opacity-60"
                         >
                             {{ paymentForm.processing ? t('customers.paymentSaving') : t('customers.recordPayment') }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
+
+        <!-- ── Add Charge Modal ── -->
+        <Teleport to="body">
+            <div
+                v-if="showChargeModal"
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+                @click.self="showChargeModal = false"
+            >
+                <div class="w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-2xl">
+                    <h2 class="mb-1 text-base font-bold text-foreground">{{ t('customers.addChargeTitle') }}</h2>
+                    <p class="mb-4 text-xs text-muted-foreground">{{ t('customers.addChargeHelp') }}</p>
+
+                    <div class="space-y-3">
+                        <p class="text-sm text-muted-foreground">
+                            {{ t('customers.outstandingLabel') }}:
+                            <span class="font-semibold" :class="customer.current_balance > 0 ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'">{{ fmt(customer.current_balance) }}</span>
+                        </p>
+                        <div>
+                            <label class="mb-1 block text-xs font-medium text-muted-foreground">{{ t('customers.chargeAmount') }}</label>
+                            <input v-model="chargeForm.amount" type="number" min="1" step="0.01"
+                                class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring" />
+                            <p v-if="chargeForm.errors.amount" class="mt-1 text-xs text-destructive">{{ chargeForm.errors.amount }}</p>
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-xs font-medium text-muted-foreground">{{ t('customers.balanceReason') }}</label>
+                            <input v-model="chargeForm.reason" type="text"
+                                class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring" />
+                        </div>
+                    </div>
+
+                    <div class="mt-5 flex gap-2">
+                        <button @click="showChargeModal = false"
+                            class="flex-1 rounded-xl border border-border py-2.5 text-sm text-muted-foreground hover:bg-accent transition-colors">{{ t('common.cancel') }}</button>
+                        <button @click="submitCharge" :disabled="chargeForm.processing"
+                            class="flex-1 rounded-xl bg-primary py-2.5 text-sm font-bold text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-60">
+                            {{ chargeForm.processing ? t('common.saving') : t('customers.saveCharge') }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </Teleport>
+
+        <!-- ── Write-off Modal ── -->
+        <Teleport to="body">
+            <div
+                v-if="showWriteOffModal"
+                class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+                @click.self="showWriteOffModal = false"
+            >
+                <div class="w-full max-w-sm rounded-2xl border border-border bg-card p-6 shadow-2xl">
+                    <h2 class="mb-1 text-base font-bold text-foreground">{{ t('customers.writeOffTitle') }}</h2>
+                    <p class="mb-4 text-xs text-muted-foreground">{{ t('customers.writeOffHelp') }}</p>
+
+                    <div class="space-y-3">
+                        <p class="text-sm text-muted-foreground">
+                            {{ t('customers.outstandingLabel') }}:
+                            <span class="font-semibold" :class="customer.current_balance > 0 ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground'">{{ fmt(customer.current_balance) }}</span>
+                        </p>
+                        <div>
+                            <label class="mb-1 block text-xs font-medium text-muted-foreground">{{ t('customers.writeOffAmount') }}</label>
+                            <input v-model="writeOffForm.amount" type="number" min="1" :max="customer.current_balance" step="0.01"
+                                :placeholder="`Max: ${Math.round(customer.current_balance)}`"
+                                class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring" />
+                            <p v-if="writeOffForm.errors.amount" class="mt-1 text-xs text-destructive">{{ writeOffForm.errors.amount }}</p>
+                        </div>
+                        <div>
+                            <label class="mb-1 block text-xs font-medium text-muted-foreground">{{ t('customers.balanceReason') }}</label>
+                            <input v-model="writeOffForm.reason" type="text"
+                                class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring" />
+                        </div>
+                    </div>
+
+                    <div class="mt-5 flex gap-2">
+                        <button @click="showWriteOffModal = false"
+                            class="flex-1 rounded-xl border border-border py-2.5 text-sm text-muted-foreground hover:bg-accent transition-colors">{{ t('common.cancel') }}</button>
+                        <button @click="submitWriteOff" :disabled="writeOffForm.processing"
+                            class="flex-1 rounded-xl bg-purple-600 py-2.5 text-sm font-bold text-white hover:bg-purple-500 transition-colors disabled:opacity-60">
+                            {{ writeOffForm.processing ? t('common.saving') : t('customers.saveWriteOff') }}
                         </button>
                     </div>
                 </div>

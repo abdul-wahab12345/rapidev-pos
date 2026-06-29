@@ -43,6 +43,7 @@ const form = useForm({
     notes: props.customer?.notes ?? '',
     credit_limit: props.customer?.credit_limit ?? '',
     discount_percent: props.customer?.discount_percent ?? '',
+    opening_balance: '' as number | '',
     city_id: props.customer?.city_id ?? null,
     area_id: props.customer?.area_id ?? null,
 });
@@ -255,6 +256,21 @@ function submit() {
                         </div>
                         <p v-if="form.errors.discount_percent" class="mt-1 text-xs text-destructive">{{ form.errors.discount_percent }}</p>
                     </div>
+                </div>
+
+                <!-- Opening udhaar balance (create only) -->
+                <div v-if="!isEdit">
+                    <label class="mb-1.5 block text-sm font-medium text-foreground">{{ t('customers.openingBalance') }}</label>
+                    <input
+                        v-model.number="form.opening_balance"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0"
+                        class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring"
+                    />
+                    <p class="mt-1 text-xs text-muted-foreground">{{ t('customers.openingBalanceHelp') }}</p>
+                    <p v-if="form.errors.opening_balance" class="mt-1 text-xs text-destructive">{{ form.errors.opening_balance }}</p>
                 </div>
 
                 <!-- Notes -->
