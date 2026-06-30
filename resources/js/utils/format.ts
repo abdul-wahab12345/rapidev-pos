@@ -48,3 +48,22 @@ export function formatQty(quantity: number | string, unit: string | null | undef
     // Decimal units: show up to 2 decimal places, trimming trailing zeros
     return parseFloat(n.toFixed(2)).toString();
 }
+
+const TILE_MATERIALS = new Set(['tile', 'ceramic', 'mosaic', 'border']);
+
+/** "≈3 box + 2 tile" from an m² quantity, or null for non-tile products. */
+export function tileBreakdown(
+    qtyM2: number | string,
+    p: { tiles_per_box?: number | null; sq_m_per_box?: number | null; material_type?: string | null },
+): string | null {
+    if (!p.tiles_per_box || !p.sq_m_per_box) return null;
+    if (!TILE_MATERIALS.has(p.material_type ?? '')) return null;
+    const sqmPerTile = p.sq_m_per_box / p.tiles_per_box;
+    if (!sqmPerTile) return null;
+    const totalTiles = Math.round(Math.abs(Number(qtyM2)) / sqmPerTile);
+    if (totalTiles <= 0) return null;
+    const boxes = Math.floor(totalTiles / p.tiles_per_box);
+    const loose = totalTiles % p.tiles_per_box;
+    if (boxes === 0 && loose === 0) return null;
+    return loose > 0 ? `≈${boxes} box + ${loose} tile` : `≈${boxes} box`;
+}

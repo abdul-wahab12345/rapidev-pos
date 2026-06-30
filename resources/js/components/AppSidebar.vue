@@ -25,6 +25,7 @@ import {
     ListOrdered,
     MapPin,
     Package,
+    Receipt,
     RotateCcw,
     ScrollText,
     Settings,
@@ -95,6 +96,15 @@ const allNavGroups = [
             { titleKey: 'nav.suppliers', href: '/purchasing/suppliers', icon: Truck },
             { titleKey: 'nav.purchaseOrders', href: '/purchasing/orders', icon: CreditCard },
             { titleKey: 'nav.expenses', href: '/expenses', icon: Wallet },
+        ],
+    },
+    {
+        labelKey: 'nav.reportsGroup',
+        requiresAccounts: false,
+        items: [
+            { titleKey: 'nav.salesReport', href: '/reports/sales', icon: Receipt },
+            { titleKey: 'nav.returnsReport', href: '/reports/returns', icon: RotateCcw },
+            { titleKey: 'nav.stockReport', href: '/inventory/reports/stock', icon: BarChart3 },
         ],
     },
     {

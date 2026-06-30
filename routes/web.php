@@ -11,6 +11,7 @@ use App\Http\Controllers\GlobalSearchController;
 use App\Http\Controllers\Inventory\CategoryController;
 use App\Http\Controllers\Inventory\ProductController;
 use App\Http\Controllers\Inventory\StockController;
+use App\Http\Controllers\Inventory\StockReportController;
 use App\Http\Controllers\Locations\LocationsController;
 use App\Http\Controllers\Parties\PartyController;
 use App\Http\Controllers\Pos\PosController;
@@ -18,6 +19,7 @@ use App\Http\Controllers\Purchasing\PurchaseOrderController;
 use App\Http\Controllers\Purchasing\SupplierController;
 use App\Http\Controllers\RateLists\RateListController;
 use App\Http\Controllers\Reports\OperationalReportsController;
+use App\Http\Controllers\Reports\SalesReportController;
 use App\Http\Controllers\Returns\ReturnController;
 use App\Http\Controllers\Sales\SalesController;
 use Illuminate\Support\Facades\Route;
@@ -92,6 +94,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('stock', [StockController::class, 'index'])->name('stock.index');
         Route::post('stock/adjust', [StockController::class, 'adjust'])->name('stock.adjust');
 
+        Route::get('reports/stock', [StockReportController::class, 'index'])->name('reports.stock');
+        Route::get('reports/stock/{product}', [StockReportController::class, 'show'])->name('reports.stock-card');
+
         Route::get('categories', [CategoryController::class, 'index'])->name('categories.index');
         Route::post('categories', [CategoryController::class, 'store'])->name('categories.store');
         Route::patch('categories/{category}', [CategoryController::class, 'update'])->name('categories.update');
@@ -109,6 +114,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/ledger', [AccountsController::class, 'ledger'])->name('ledger');
         Route::get('/receivables', [AccountsController::class, 'receivables'])->name('receivables');
     });
+
+    // ── Sales & Returns reports (open to all roles, under Reports menu) ──
+    Route::get('reports/sales', [SalesReportController::class, 'sales'])->name('reports.sales');
+    Route::get('reports/returns', [SalesReportController::class, 'returns'])->name('reports.returns');
 
     // ── Business / operational reports (blocked for salesman role) ──
     Route::prefix('reports')->name('reports.')->middleware('accounts.access')->group(function () {
