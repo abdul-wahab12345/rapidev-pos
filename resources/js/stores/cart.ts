@@ -47,6 +47,8 @@ export interface CartItem {
     tiles_per_box: number | null;
     sq_m_per_box: number | null;
     material_type: string | null;
+    tile_width_in: number | null;
+    tile_height_in: number | null;
 }
 
 export interface Customer {
@@ -204,6 +206,8 @@ export const useCartStore = defineStore('cart', () => {
                 tiles_per_box: product.tiles_per_box ?? null,
                 sq_m_per_box: product.sq_m_per_box ?? null,
                 material_type: product.material_type ?? null,
+                tile_width_in: product.tile_width_in ?? null,
+                tile_height_in: product.tile_height_in ?? null,
             });
         }
     }

@@ -188,7 +188,7 @@ class SalesController extends Controller
     // AJAX: return full receipt data for inline printing from the list page
     public function receiptData(Sale $sale): JsonResponse
     {
-        $sale->load(['items.product:id,name_ur,unit,tiles_per_box,sq_m_per_box,material_type', 'customer:id,name,phone', 'cashier:id,name', 'branch:id,name']);
+        $sale->load(['items.product:id,name_ur,unit,tiles_per_box,sq_m_per_box,material_type,tile_width_in,tile_height_in', 'customer:id,name,phone', 'cashier:id,name', 'branch:id,name']);
 
         $tenant   = auth()->user()->tenant;
         $settings = $tenant?->settings ?? [];
@@ -220,6 +220,8 @@ class SalesController extends Controller
                 'tiles_per_box' => optional($i->product)->tiles_per_box,
                 'sq_m_per_box'  => optional($i->product)->sq_m_per_box ? (float) $i->product->sq_m_per_box : null,
                 'material_type' => optional($i->product)->material_type,
+                'tile_width_in' => optional($i->product)->tile_width_in ? (float) $i->product->tile_width_in : null,
+                'tile_height_in'=> optional($i->product)->tile_height_in ? (float) $i->product->tile_height_in : null,
                 'unit_price'    => (float) $i->unit_price,
                 'discount'      => (float) $i->discount,
                 'line_total'    => (float) $i->line_total,

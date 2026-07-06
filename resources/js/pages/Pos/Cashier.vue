@@ -446,6 +446,8 @@ function printReceipt() {
             tiles_per_box: item.tiles_per_box,
             sq_m_per_box:  item.sq_m_per_box,
             material_type: item.material_type,
+            tile_width_in: item.tile_width_in,
+            tile_height_in: item.tile_height_in,
         })),
         subtotal:         cart.subtotal,
         discount:         cart.cartDiscount,

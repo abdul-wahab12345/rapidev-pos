@@ -13,6 +13,8 @@ export interface ReceiptItem {
     tiles_per_box?: number | null;
     sq_m_per_box?: number | null;
     material_type?: string | null;
+    tile_width_in?: number | null;
+    tile_height_in?: number | null;
 }
 
 const TILE_TYPES = ['tile', 'ceramic', 'mosaic', 'border'];
@@ -181,10 +183,13 @@ function buildA4Html(data: ReceiptData, t: TFn): string {
         const vl   = item.variant_label ? `<br><span style="font-size:11px;color:#666">${item.variant_label}</span>` : '';
         const qtyStr = item.unit ? `${item.quantity} ${formatUnit(item.unit)}` : String(item.quantity);
         const bdStr  = tileBreakdown(item);
+        const sizeStr = (TILE_TYPES.includes(item.material_type ?? '') && item.tile_width_in && item.tile_height_in) 
+            ? `<br><span style="font-size:11px;color:#666">Size: ${item.tile_width_in}" x ${item.tile_height_in}"</span>` 
+            : '';
         return `<tr>
             <td class="num">${i + 1}</td>
-            <td>${name}${vl}${bdStr ? `<br><span style="font-size:11px;color:#666">${bdStr}</span>` : ''}</td>
-            <td class="r">${qtyStr}</td>
+            <td>${name}${vl}${sizeStr}</td>
+            <td class="r">${qtyStr}${bdStr ? `<br><span style="font-size:11px;color:#666">${bdStr}</span>` : ''}</td>
             <td class="r">${fm(item.unit_price)}</td>
             <td class="r">${item.discount > 0 ? `−${fm(item.discount)}` : '—'}</td>
             <td class="r fw">${fm(item.line_total)}</td>
