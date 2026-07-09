@@ -31,18 +31,30 @@ class StockReportService
     /** Manual (human) adjustment reasons — excludes automatic 'purchase'/'return'. */
     private const MANUAL_REASONS = ['damage', 'theft', 'correction', 'other'];
 
-    public static function snapshot(?string $categoryId, ?string $from, ?string $to, ?string $search): Collection
+    public static function snapshot(?string $categoryId, ?string $from, ?string $to, ?string $search, ?string $tileSize = null): Collection
     {
+        // Parse tile_size filter e.g. "12x24" → width=12, height=24
+        $tileSizeW = null;
+        $tileSizeH = null;
+        if ($tileSize && preg_match('/^(\d+)x(\d+)$/i', $tileSize, $m)) {
+            $tileSizeW = (int) $m[1];
+            $tileSizeH = (int) $m[2];
+        }
+
         $products = Product::with('category:id,name,color')
             ->when($categoryId, fn ($q) => $q->where('category_id', $categoryId))
             ->when($search, fn ($q) => $q->where(fn ($w) => $w
                 ->where('name', 'like', "%{$search}%")
                 ->orWhere('sku', 'like', "%{$search}%")
                 ->orWhere('barcode', 'like', "%{$search}%")))
+            ->when($tileSizeW !== null, fn ($q) => $q
+                ->whereRaw('CAST(tile_width_in AS UNSIGNED) = ?', [$tileSizeW])
+                ->whereRaw('CAST(tile_height_in AS UNSIGNED) = ?', [$tileSizeH]))
             ->orderBy('name')
             ->get(['id', 'name', 'sku', 'unit', 'category_id', 'reorder_level',
                    'tiles_per_box', 'sq_m_per_box', 'material_type',
                    'tile_width_in', 'tile_height_in']);
+
 
         $ids = $products->pluck('id');
 

@@ -19,23 +19,26 @@ interface Category { id: string; name: string }
 const props = defineProps<{
     rows: Row[];
     categories: Category[];
+    tile_sizes: string[];   // e.g. ['12x24', '24x48']
     stats: { total_products: number; flagged: number };
-    filters: { category: string | null; from: string; to: string; search: string | null };
+    filters: { category: string | null; from: string; to: string; search: string | null; tile_size: string | null };
 }>();
 
 const form = reactive({
-    category: props.filters.category ?? '',
-    from: props.filters.from,
-    to: props.filters.to,
-    search: props.filters.search ?? '',
+    category:  props.filters.category  ?? '',
+    tile_size: props.filters.tile_size ?? '',
+    from:      props.filters.from,
+    to:        props.filters.to,
+    search:    props.filters.search ?? '',
 });
 
 function applyFilters() {
     router.get(route('inventory.reports.stock'), {
-        category: form.category || undefined,
-        from: form.from || undefined,
-        to: form.to || undefined,
-        search: form.search || undefined,
+        category:  form.category  || undefined,
+        tile_size: form.tile_size || undefined,
+        from:      form.from      || undefined,
+        to:        form.to        || undefined,
+        search:    form.search    || undefined,
     }, { preserveState: true, preserveScroll: true, replace: true });
 }
 
@@ -180,13 +183,23 @@ function printReport() {
             </div>
 
             <!-- Filters -->
-            <div class="grid grid-cols-1 gap-3 sm:grid-cols-4 rounded-xl border border-border bg-card p-4">
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-5 rounded-xl border border-border bg-card p-4">
                 <div>
                     <label class="mb-1 block text-xs font-medium text-muted-foreground">Category</label>
                     <select v-model="form.category" @change="applyFilters"
                         class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm">
                         <option value="">All categories</option>
                         <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="mb-1 block text-xs font-medium text-muted-foreground">Tile Size</label>
+                    <select v-model="form.tile_size" @change="applyFilters"
+                        class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm">
+                        <option value="">All sizes</option>
+                        <option v-for="s in tile_sizes" :key="s" :value="s">
+                            {{ s.replace('x', '" × ') + '"' }}
+                        </option>
                     </select>
                 </div>
                 <div>

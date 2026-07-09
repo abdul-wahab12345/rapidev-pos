@@ -16,25 +16,50 @@ class StockReportController extends Controller
     public function index(Request $request): Response
     {
         $filters = $request->validate([
-            'category' => 'nullable|uuid|exists:categories,id',
-            'from'     => 'nullable|date',
-            'to'       => 'nullable|date',
-            'search'   => 'nullable|string|max:100',
+            'category'  => 'nullable|uuid|exists:categories,id',
+            'from'      => 'nullable|date',
+            'to'        => 'nullable|date',
+            'search'    => 'nullable|string|max:100',
+            'tile_size' => 'nullable|string|max:20',   // e.g. "24x48"
         ]);
 
         $from = $filters['from'] ?? now()->startOfMonth()->format('Y-m-d');
         $to   = $filters['to']   ?? now()->format('Y-m-d');
 
-        $rows = StockReportService::snapshot($filters['category'] ?? null, $from, $to, $filters['search'] ?? null);
+        $rows = StockReportService::snapshot(
+            $filters['category']  ?? null,
+            $from, $to,
+            $filters['search']    ?? null,
+            $filters['tile_size'] ?? null,
+        );
+
+        // Unique tile sizes from tile-type products for the filter dropdown.
+        // Format: "12x24" (width x height, both stored as inches).
+        $tileSizes = Product::whereNotNull('tile_width_in')
+            ->whereNotNull('tile_height_in')
+            ->whereIn('material_type', ['tile', 'ceramic', 'mosaic', 'border'])
+            ->selectRaw('CAST(tile_width_in AS UNSIGNED) as w, CAST(tile_height_in AS UNSIGNED) as h')
+            ->groupBy('w', 'h')
+            ->orderBy('w')->orderBy('h')
+            ->get()
+            ->map(fn ($r) => "{$r->w}x{$r->h}")
+            ->values();
 
         return Inertia::render('Inventory/Reports/StockReport', [
             'rows'       => $rows,
             'categories' => Category::orderBy('name')->get(['id', 'name']),
+            'tile_sizes' => $tileSizes,
             'stats'      => [
                 'total_products' => $rows->count(),
                 'flagged'        => $rows->where('flagged', true)->count(),
             ],
-            'filters'    => ['category' => $filters['category'] ?? null, 'from' => $from, 'to' => $to, 'search' => $filters['search'] ?? null],
+            'filters'    => [
+                'category'  => $filters['category']  ?? null,
+                'from'      => $from,
+                'to'        => $to,
+                'search'    => $filters['search']    ?? null,
+                'tile_size' => $filters['tile_size']  ?? null,
+            ],
         ]);
     }
 
