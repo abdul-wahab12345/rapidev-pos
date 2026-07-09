@@ -208,9 +208,11 @@ class SalesController extends Controller
             'easypaisa_amount' => (float) $sale->easypaisa_amount,
             'udhaar_amount'    => (float) $sale->udhaar_amount,
             'payment_method'   => $sale->payment_method,
-            'customer'         => $sale->customer ? ['name' => $sale->customer->name, 'phone' => $sale->customer->phone] : null,
-            'cashier'          => ['name' => $sale->cashier?->name],
-            'branch'           => ['name' => $sale->branch?->name],
+            // Flat fields matching ReceiptData interface (same shape as Cashier.vue)
+            'customer_name'    => $sale->customer?->name,
+            'customer_phone'   => $sale->customer?->phone,
+            'cashier_name'     => $sale->cashier?->name,
+            'branch_name'      => $sale->branch?->name,
             'items'            => $sale->items->map(fn ($i) => [
                 'name'          => $i->product_name,
                 'name_ur'       => optional($i->product)->name_ur,
@@ -227,7 +229,7 @@ class SalesController extends Controller
                 'discount'      => (float) $i->discount,
                 'line_total'    => (float) $i->line_total,
             ]),
-            // tenant settings for receipt rendering
+            // Tenant settings for receipt rendering
             'business_name'     => data_get($settings, 'business_name', $tenant?->name ?? ''),
             'business_phone'    => data_get($settings, 'business_phone'),
             'business_address'  => data_get($settings, 'business_address'),
