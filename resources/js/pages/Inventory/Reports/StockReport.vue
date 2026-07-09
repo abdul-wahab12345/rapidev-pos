@@ -5,12 +5,13 @@ import type { BreadcrumbItem } from '@/types';
 import { formatQty, formatUnit, tileBreakdown } from '@/utils/format';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { AlertTriangle, Boxes, FileText, Printer, Search } from 'lucide-vue-next';
-import { reactive } from 'vue';
+import { computed, reactive } from 'vue';
 
 interface Row {
     id: string; name: string; sku: string | null; unit: string | null; category: string | null;
     quantity: number; reorder_level: number;
     tiles_per_box: number | null; sq_m_per_box: number | null; material_type: string | null;
+    tile_width_in: number | null; tile_height_in: number | null;
     manual_adjustments: number; manual_net: number; flagged: boolean;
 }
 interface Category { id: string; name: string }
@@ -50,23 +51,85 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Stock Report', href: '#' },
 ];
 
+const TILE_MATERIALS = ['tile', 'ceramic', 'mosaic', 'border'];
+
+// ── Tile totals (shown when any tile rows are visible) ─────────
+const tileTotals = computed(() => {
+    const tileRows = props.rows.filter(r => TILE_MATERIALS.includes(r.material_type ?? ''));
+    if (tileRows.length === 0) return null;
+
+    let totalSqm = 0;
+    let totalBoxes = 0;
+    let totalLoose = 0;
+    let totalPieces = 0;
+
+    for (const r of tileRows) {
+        totalSqm += r.quantity;
+        if (r.tiles_per_box && r.sq_m_per_box) {
+            const sqmPerTile = r.sq_m_per_box / r.tiles_per_box;
+            if (sqmPerTile > 0) {
+                const pieces = Math.round(r.quantity / sqmPerTile);
+                totalPieces += pieces;
+                totalBoxes  += Math.floor(pieces / r.tiles_per_box);
+                totalLoose  += pieces % r.tiles_per_box;
+            }
+        }
+    }
+
+    // Carry over excess loose tiles into boxes
+    const firstWithBox = tileRows.find(r => r.tiles_per_box);
+    const commonTpb = firstWithBox?.tiles_per_box ?? null;
+    const mixedBoxSizes = tileRows.some(r => r.tiles_per_box !== commonTpb);
+    if (!mixedBoxSizes && commonTpb && totalLoose >= commonTpb) {
+        totalBoxes += Math.floor(totalLoose / commonTpb);
+        totalLoose  = totalLoose % commonTpb;
+    }
+
+    return {
+        sqm: Math.round(totalSqm * 100) / 100,
+        pieces: totalPieces,
+        boxes: totalBoxes,
+        loose: totalLoose,
+        tileCount: tileRows.length,
+        mixedBoxSizes,
+    };
+});
+
 function printReport() {
     const catLabel = props.categories.find(c => c.id === form.category)?.name ?? 'All categories';
     const rowsHtml = props.rows.map((r, i) => {
         const bd = tileBreakdown(r.quantity, r);
         const adjBd = tileBreakdown(r.manual_net, r);
+        const sizeStr = (TILE_MATERIALS.includes(r.material_type ?? '') && r.tile_width_in && r.tile_height_in)
+            ? `<br><span class="sub">${r.tile_width_in}" × ${r.tile_height_in}"</span>`
+            : '';
         const adjCell = r.flagged
             ? `⚑ ${r.manual_adjustments}× (${formatQty(r.manual_net, r.unit)} ${formatUnit(r.unit)})${adjBd ? `<br><span class="sub">${adjBd}</span>` : ''}`
             : '—';
         return `
         <tr class="${r.flagged ? 'flagged' : ''}">
             <td class="num">${i + 1}</td>
-            <td>${r.name}${r.sku ? `<br><span class="sub">${r.sku}</span>` : ''}</td>
+            <td>${r.name}${r.sku ? `<br><span class="sub">${r.sku}</span>` : ''}${sizeStr}</td>
             <td>${r.category ?? '—'}</td>
             <td class="r fw">${formatQty(r.quantity, r.unit)} ${formatUnit(r.unit)}${bd ? `<br><span class="sub">${bd}</span>` : ''}</td>
             <td class="c">${adjCell}</td>
         </tr>`;
     }).join('');
+
+    // Tile totals footer row for print
+    const tt = tileTotals.value;
+    const tfootHtml = tt ? `
+        <tfoot>
+            <tr class="totals-row">
+                <td colspan="2" class="r"><strong>Total (${tt.tileCount} tile product${tt.tileCount !== 1 ? 's' : ''})</strong></td>
+                <td class="r fw">
+                    ${tt.sqm} m²<br>
+                    <span class="sub">≈ ${tt.boxes} box${tt.loose ? ` + ${tt.loose} tile` : ''}</span><br>
+                    <span class="sub">${tt.pieces.toLocaleString()} pcs total</span>
+                </td>
+                <td></td><td></td>
+            </tr>
+        </tfoot>` : '';
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Stock Report</title><style>
         *{margin:0;padding:0;box-sizing:border-box;}
@@ -76,13 +139,14 @@ function printReport() {
         th{background:#111;color:#fff;font-size:12px;text-transform:uppercase;letter-spacing:.5px;}
         .r{text-align:right;} .c{text-align:center;} .fw{font-weight:600;} .num{color:#888;width:34px;text-align:center;}
         .sub{color:#888;font-size:12px;} .foot{margin-top:12px;color:#555;font-size:13px;}
+        tfoot tr.totals-row td{background:#f0f9ff;border-top:2px solid #0c4a6e;font-size:13px;}
         tr.flagged td{background:#fff7ed;} tr.flagged td:first-child{border-left:3px solid #f59e0b;}
-        @media print{@page{size:A4;margin:10mm;} tr.flagged td{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
+        @media print{@page{size:A4;margin:10mm;} tr.flagged td,tfoot tr.totals-row td{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}
     </style></head><body>
         <h1>Stock Report</h1>
         <div class="meta">${catLabel} · Adjustments flagged for ${form.from} → ${form.to} · Printed ${new Date().toLocaleString()}</div>
         <table><thead><tr><th>#</th><th>Product</th><th>Category</th><th class="r">Stock</th><th class="c">Manual Adj</th></tr></thead>
-        <tbody>${rowsHtml}</tbody></table>
+        <tbody>${rowsHtml}</tbody>${tfootHtml}</table>
         <div class="foot">${props.rows.length} products · ${props.stats.flagged} manually adjusted in period · ⚑ = adjusted (damage/theft/correction/other)</div>
     </body></html>`;
 
@@ -163,6 +227,10 @@ function printReport() {
                             <td class="px-4 py-3">
                                 <p class="font-medium text-foreground">{{ row.name }}</p>
                                 <p v-if="row.sku" class="font-mono text-xs text-muted-foreground">{{ row.sku }}</p>
+                                <p v-if="TILE_MATERIALS.includes(row.material_type ?? '') && row.tile_width_in && row.tile_height_in"
+                                   class="text-xs text-muted-foreground">
+                                    {{ row.tile_width_in }}" × {{ row.tile_height_in }}"
+                                </p>
                             </td>
                             <td class="px-4 py-3 text-muted-foreground">{{ row.category ?? '—' }}</td>
                             <td class="px-4 py-3 text-end font-semibold tabular-nums">
@@ -189,6 +257,26 @@ function printReport() {
                             <td colspan="5" class="px-4 py-10 text-center text-muted-foreground">No products found.</td>
                         </tr>
                     </tbody>
+                    <!-- Tile totals footer row -->
+                    <tfoot v-if="tileTotals">
+                        <tr class="border-t-2 border-sky-300 bg-sky-50/80 dark:border-sky-700 dark:bg-sky-950/40 text-sky-900 dark:text-sky-200">
+                            <td class="px-4 py-3 text-xs text-muted-foreground">
+                                Total ({{ tileTotals.tileCount }} tile product{{ tileTotals.tileCount !== 1 ? 's' : '' }})
+                            </td>
+                            <td class="px-4 py-3"></td>
+                            <td class="px-4 py-3 text-end tabular-nums">
+                                <div class="font-bold">{{ tileTotals.sqm }} <span class="text-xs font-normal">m²</span></div>
+                                <div class="text-xs font-semibold text-sky-700 dark:text-sky-300">
+                                    ≈ {{ tileTotals.boxes }} box{{ tileTotals.loose ? ` + ${tileTotals.loose} tile` : '' }}
+                                </div>
+                                <div class="text-xs font-normal text-muted-foreground">
+                                    {{ tileTotals.pieces.toLocaleString() }} pcs total
+                                </div>
+                            </td>
+                            <td class="px-4 py-3"></td>
+                            <td class="px-4 py-3"></td>
+                        </tr>
+                    </tfoot>
                 </table>
             </div>
         </div>

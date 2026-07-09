@@ -36,6 +36,7 @@ export interface CartItem {
     variant_id: string | null;
     name: string;
     name_ur: string | null;
+    sku: string | null;
     variant_label: string | null;
     unit: string | null;
     unit_price: number;
@@ -194,6 +195,7 @@ export const useCartStore = defineStore('cart', () => {
                 variant_id: variantId,
                 name: product.name,
                 name_ur: product.name_ur ?? null,
+                sku: product.sku ?? null,
                 variant_label: variantLabel,
                 unit: product.unit ?? null,
                 unit_price: unitPrice,

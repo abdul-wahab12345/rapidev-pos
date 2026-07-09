@@ -437,6 +437,7 @@ function printReceipt() {
         items: cart.items.map(item => ({
             name:          item.name,
             name_ur:       item.name_ur,
+            sku:           item.sku,
             variant_label: item.variant_label,
             quantity:      item.quantity,
             unit:          item.unit,

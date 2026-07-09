@@ -41,7 +41,8 @@ class StockReportService
                 ->orWhere('barcode', 'like', "%{$search}%")))
             ->orderBy('name')
             ->get(['id', 'name', 'sku', 'unit', 'category_id', 'reorder_level',
-                   'tiles_per_box', 'sq_m_per_box', 'material_type']);
+                   'tiles_per_box', 'sq_m_per_box', 'material_type',
+                   'tile_width_in', 'tile_height_in']);
 
         $ids = $products->pluck('id');
 
@@ -75,6 +76,8 @@ class StockReportService
                 'tiles_per_box'      => $p->tiles_per_box,
                 'sq_m_per_box'       => $p->sq_m_per_box ? (float) $p->sq_m_per_box : null,
                 'material_type'      => $p->material_type,
+                'tile_width_in'      => $p->tile_width_in ? (float) $p->tile_width_in : null,
+                'tile_height_in'     => $p->tile_height_in ? (float) $p->tile_height_in : null,
                 'manual_adjustments' => $adj ? (int) $adj->cnt : 0,
                 'manual_net'         => $adj ? (float) $adj->net : 0.0,
                 'flagged'            => (bool) $adj,

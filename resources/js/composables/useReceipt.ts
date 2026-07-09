@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n';
 export interface ReceiptItem {
     name: string;
     name_ur?: string | null;
+    sku?: string | null;
     variant_label?: string | null;
     quantity: number;
     unit?: string | null;
@@ -186,9 +187,10 @@ function buildA4Html(data: ReceiptData, t: TFn): string {
         const sizeStr = (TILE_TYPES.includes(item.material_type ?? '') && item.tile_width_in && item.tile_height_in) 
             ? `<br><span style="font-size:11px;color:#666">Size: ${item.tile_width_in}" x ${item.tile_height_in}"</span>` 
             : '';
+        const skuStr = item.sku ? `<br><span style="font-size:10px;color:#999;font-family:'Courier New',monospace">${item.sku}</span>` : '';
         return `<tr>
             <td class="num">${i + 1}</td>
-            <td>${name}${vl}${sizeStr}</td>
+            <td>${name}${skuStr}${vl}${sizeStr}</td>
             <td class="r">${qtyStr}${bdStr ? `<br><span style="font-size:11px;color:#666">${bdStr}</span>` : ''}</td>
             <td class="r">${fm(item.unit_price)}</td>
             <td class="r">${item.discount > 0 ? `−${fm(item.discount)}` : '—'}</td>
